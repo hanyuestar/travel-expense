@@ -1,0 +1,13 @@
+{
+  "name": "travel-expense-workbench",
+  "version": "1.0.0",
+  "description": "旅行路线 · 经费台 — 自托管工作台（数据存于挂载卷的 routes.json）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

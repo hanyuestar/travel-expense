@@ -1,0 +1,17 @@
+services:
+  travel-expense:
+    # 方式一：本地构建（仓库根目录含 Dockerfile，便于随时改代码）
+    build: .
+    # 方式二：直接使用预构建镜像（二选一，取消下一行注释即可）
+    # image: ghcr.io/hanyuestar/travel-expense:latest
+    # 切换到 Docker Hub 镜像：image: kyson666/travel-expense:latest
+    container_name: travel-expense
+    restart: unless-stopped
+    ports:
+      - "3006:3000"   # 主机端口 3006 -> 容器 3000；改端口只需改这里
+    volumes:
+      # 关键：把宿主机目录挂到容器 /data，所有路线数据落在你的磁盘上
+      - ./data:/data
+    environment:
+      - PORT=3000
+      - DATA_DIR=/data
