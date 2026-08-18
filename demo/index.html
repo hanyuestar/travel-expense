@@ -1,10 +1,10 @@
 <!doctype html>
-<!-- 旅行路线 · 经费台 — 自托管版（Docker + Node 后端，数据持久化到挂载卷 routes.json） -->
+<!-- 旅行路线 · 经费台 — 纯前端演示版（无后端，数据仅临时存于浏览器 localStorage） -->
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>旅行路线 · 经费台</title>
+<title>旅行路线 · 经费台（在线演示）</title>
 <style>
   :root{
     --primary:#15a98c; --primary-d:#0e8a72; --primary-l:#e6f7f2;
@@ -17,6 +17,9 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
     background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+  .demobar{background:linear-gradient(120deg,#fff7e6,#fdeccb);color:#8a5a00;border-bottom:1px solid #f3d99a;
+    font-size:13px;padding:9px 14px;text-align:center;line-height:1.5}
+  .demobar b{color:#b9790a}
   header{position:sticky;top:0;z-index:30;background:linear-gradient(120deg,var(--primary),#1cc3a3);
     color:#fff;padding:14px 16px 12px;box-shadow:0 2px 12px rgba(20,90,75,.18)}
   .h-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -148,8 +151,8 @@
   .toast.show{opacity:1}
   .close-x{margin-left:auto;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1}
   .foot{text-align:center;color:var(--muted);font-size:12px;margin-top:18px;padding:0 14px}
+  .foot a{color:var(--primary-d)}
 
-  /* ===== 移动端适配（≤560px 单列，≤380px 进一步收紧） ===== */
   @media(max-width:560px){
     header{padding:11px 12px 10px}
     .h-title{font-size:17px}
@@ -171,6 +174,7 @@
 </style>
 </head>
 <body>
+<div class="demobar">🧪 这是<b>演示版</b>：所有数据仅临时保存在<b>你的浏览器本地</b>（localStorage），不会上传任何服务器。可随意新增 / 编辑 / 删除路线、查看年度统计来体验功能。</div>
 <header>
   <div class="h-row">
     <div>
@@ -178,7 +182,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
         旅行路线 · 经费台
       </div>
-      <div class="h-sub">管理历年出行路线与花费 · 按年度复盘 · 数据存于你的 NAS</div>
+      <div class="h-sub">演示版 · 纯前端 · 数据存于你的浏览器</div>
     </div>
     <div class="h-actions">
       <div class="sync"><span class="dot"></span><span id="syncTxt">加载中…</span></div>
@@ -285,22 +289,43 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<div class="foot">数据保存在你自己的服务器（Docker 容器挂载卷 routes.json），每次增删改自动落盘。<br>换设备无需导入导出，登录同一地址即可看到全部数据。「导出 JSON」仅作离线备份用。<br>© Kyson</div>
+<div class="foot">© Kyson · 本演示数据仅保存在你的浏览器本地（localStorage），刷新或重开浏览器仍在，清除浏览器数据即丢失，不会上传任何服务器。<br>完整自托管版（数据存你自己的服务器）见 <a href="https://github.com/hanyuestar/travel-expense" target="_blank" rel="noopener">GitHub 仓库</a>。</div>
 
 <script>
 const CATS=["交通","机票","高铁","住宿","餐饮","门票","团费","购物","其他"];
 const COLORS={"交通":"#60a5fa","机票":"#3b82f6","高铁":"#06b6d4","住宿":"#f59e0b","餐饮":"#ef6b5e","门票":"#a78bfa","团费":"#ec4899","购物":"#fb923c","其他":"#94a3b8"};
+const LS_KEY="travel_expense_demo_v1";
+const SAMPLE=[
+  {id:"sample001",year:"2024",name:"示例·东海海岛慢游",daterange:"7/12 - 7/16",type:"自由行",days:5,people:2,dest:"东海群岛",
+   scenic:"Day1 抵达海岛-入住民宿-海边日落\nDay2 浮潜-环岛骑行\nDay3 渔村早市-灯塔徒步\nDay4 出海观鲸-温泉\nDay5 返程",hotel:"海岛民宿",
+   exp:{"交通":0,"机票":2400,"高铁":0,"住宿":1200,"餐饮":800,"门票":300,"团费":0,"购物":500,"其他":200},notes:"示例数据，仅用于演示"},
+  {id:"sample002",year:"2025",name:"示例·江南水乡漫步",daterange:"4/03 - 4/05",type:"半自由行",days:3,people:2,dest:"江南古镇",
+   scenic:"Day1 抵达-乌篷船-老街\nDay2 园林-博物馆\nDay3 早茶-返程",hotel:"临水客栈",
+   exp:{"交通":0,"机票":0,"高铁":600,"住宿":900,"餐饮":450,"门票":260,"团费":0,"购物":380,"其他":110},notes:"示例数据，仅用于演示"},
+  {id:"sample003",year:"2023",name:"示例·西北高原徒步",daterange:"9/28 - 10/02",type:"跟团",days:5,people:4,dest:"西北高原",
+   scenic:"Day1 集合-草原\nDay2 雪山徒步\nDay3 湖泊-骑行\nDay4 峡谷\nDay5 返程",hotel:"营地 / 客栈",
+   exp:{"交通":0,"机票":3200,"高铁":0,"住宿":1500,"餐饮":1000,"门票":600,"团费":2000,"购物":0,"其他":400},notes:"示例数据，仅用于演示"},
+  {id:"sample004",year:"2026",name:"示例·周末近郊轻旅行",daterange:"10/02 - 10/03",type:"自由行",days:2,people:3,dest:"近郊度假区",
+   scenic:"Day1 自驾-露营-烧烤\nDay2 徒步-返程",hotel:"营地",
+   exp:{"交通":200,"机票":0,"高铁":0,"住宿":0,"餐饮":350,"门票":120,"团费":0,"购物":0,"其他":80},notes:"示例数据，仅用于演示"}
+];
 let routes=[];
 let state={view:"routes",filterYear:"all",search:"",curId:null};
 
-/* ---------- 后端 API ---------- */
+/* ---------- 浏览器本地存储（替代后端 API） ---------- */
+function load(){
+  try{const s=localStorage.getItem(LS_KEY);if(s){const a=JSON.parse(s);if(Array.isArray(a)&&a.length)return a;}}catch(e){}
+  const seed=SAMPLE.map(r=>Object.assign({},r));localStorage.setItem(LS_KEY,JSON.stringify(seed));return seed;
+}
+function persist(){try{localStorage.setItem(LS_KEY,JSON.stringify(routes));}catch(e){}}
 function setSync(t){const el=document.getElementById("syncTxt");if(el)el.textContent=t;}
-async function apiGet(){const r=await fetch("/api/routes");if(!r.ok)throw new Error("GET fail");return await r.json();}
-async function apiPost(obj){const r=await fetch("/api/routes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(obj)});return await r.json();}
-async function apiPut(id,obj){const r=await fetch("/api/routes/"+encodeURIComponent(id),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(obj)});return await r.json();}
-async function apiDelete(id){await fetch("/api/routes/"+encodeURIComponent(id),{method:"DELETE"});}
-async function apiDeleteAll(){await fetch("/api/routes",{method:"DELETE"});}
-async function reload(){routes=await apiGet();refresh();}
+function uid(){return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+async function apiGet(){return routes;}
+async function apiPost(obj){const rec=Object.assign({id:uid()},obj);routes.unshift(rec);persist();return rec;}
+async function apiPut(id,obj){const i=routes.findIndex(r=>r.id===id);if(i<0)return null;routes[i]=Object.assign({},routes[i],obj,{id});persist();return routes[i];}
+async function apiDelete(id){routes=routes.filter(r=>r.id!==id);persist();}
+async function apiDeleteAll(){routes=[];persist();}
+async function reload(){routes=load();refresh();}
 
 function fmt(n){n=Math.round((n||0)*100)/100;return n.toLocaleString("zh-CN");}
 function totalOf(r){return CATS.reduce((s,c)=>s+(parseFloat(r.exp[c])||0),0);}
@@ -470,12 +495,12 @@ async function saveForm(){
   try{
     if(state.curId){await apiPut(state.curId,obj);toast("已保存");}
     else{await apiPost(obj);toast("已新增路线");}
-    closeMask("formMask");await reload();setSync("已同步");
-  }catch(e){toast("保存失败，请重试");setSync("已同步");}
+    closeMask("formMask");await reload();setSync("已存浏览器本地");
+  }catch(e){toast("保存失败，请重试");setSync("已存浏览器本地");}
 }
 async function deleteRoute(id){
   if(!confirm("确定删除这条路线？此操作不可撤销"))return;
-  try{await apiDelete(id);await reload();toast("已删除");setSync("已同步");}
+  try{await apiDelete(id);await reload();toast("已删除");setSync("已存浏览器本地");}
   catch(e){toast("删除失败，请重试");}
 }
 
@@ -502,11 +527,11 @@ function detailExp(c,v,t){const pct=t>0?Math.round(v/t*100):0;
   return '<div class="detail-row"><span class="k"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:'+COLORS[c]+';margin-right:6px"></span>'+c+'</span>'+
     '<span class="v">¥'+fmt(v)+' <span style="color:var(--muted);font-weight:400;font-size:12px">'+pct+'%</span></span></div>';}
 
-/* ---------- backup ---------- */
+/* ---------- backup（演示：仅操作浏览器本地） ---------- */
 function exportData(){
   const blob=new Blob([JSON.stringify(routes,null,2)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download="旅行经费台_备份_"+new Date().toISOString().slice(0,10)+".json";a.click();
+  a.download="旅行经费台_演示备份_"+new Date().toISOString().slice(0,10)+".json";a.click();
   toast("已导出 JSON 备份");
 }
 async function importData(file){
@@ -520,11 +545,11 @@ async function importData(file){
     if(existing.has(r.id))continue;
     await apiPost(r);added++;
   }
-  await reload();toast("已导入 "+added+" 条路线");setSync("已同步");
+  await reload();toast("已导入 "+added+" 条路线");setSync("已存浏览器本地");
 }
 async function clearAll(){
-  if(!confirm("⚠ 将清空全部路线数据（含服务器上的 routes.json），且无法恢复！建议先「导出 JSON 备份」。继续？"))return;
-  await apiDeleteAll();await reload();toast("已清空全部数据");setSync("已同步");
+  if(!confirm("⚠ 将清空全部演示数据（仅清除你浏览器本地存储），且无法恢复！继续？"))return;
+  await apiDeleteAll();await reload();toast("已清空全部数据");setSync("已存浏览器本地");
 }
 
 /* ---------- helpers ---------- */
@@ -563,9 +588,8 @@ document.addEventListener("click",e=>{if(!e.target.closest(".menu"))document.get
 buildExpInputs();
 (async ()=>{
   setSync("加载中…");
-  try{routes=await apiGet();setSync("已同步");}
-  catch(e){setSync("连接失败");toast("无法连接服务器，请检查后端是否启动");routes=[];}
-  refresh();
+  try{routes=load();setSync("演示·数据在浏览器");refresh();}
+  catch(e){setSync("加载失败");toast("本地存储不可用，请换用现代浏览器");routes=[];refresh();}
 })();
 </script>
 </body>

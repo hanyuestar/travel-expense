@@ -2,7 +2,7 @@
 
 一个**自托管的旅行路线 + 经费管理工作台**：管理历年出行路线，按 9 类花费拆分（交通 / 机票 / 高铁 / 住宿 / 餐饮 / 门票 / 团费 / 购物 / 其他），按年度做统计复盘。**数据存在你自己的设备上**，手机/电脑自适应。
 
-> 当前仓库已预置来自 Excel《旅行计划》整理出的 **12 条路线**（2023–2026），已填金额合计约 **¥6,875.51**（原表大量历史行程未填金额，可在工作台内随时补填，统计实时更新）。
+> 仓库内置若干**示例路线**供快速体验；首次运行后可随时清空并录入你自己的行程，所有数据仅保存在你自己的服务器。
 
 ---
 
@@ -17,6 +17,16 @@
 | **自适应** | 手机单列、PC 多列；浏览器「添加到主屏幕」即伪原生 App |
 
 技术特性：后端纯 Node 内置 `http`，**零 npm 依赖**，镜像约 50MB；前端单文件 HTML，全内联、无任何第三方请求；存储为单个标准 JSON。
+
+---
+
+## 🎮 在线演示
+
+不想部署也能体验功能？打开纯前端演示（无需后端、无需安装，数据临时保存在你的浏览器本地）：
+
+👉 **[点此体验在线 Demo](https://htmlpreview.github.io/?https://github.com/hanyuestar/travel-expense/blob/main/demo/index.html)**
+
+演示版内置示例数据，可随意新增 / 编辑 / 删除路线、查看年度统计；所有改动仅存于当前浏览器，不会上传任何服务器。
 
 ---
 
@@ -36,7 +46,7 @@ docker compose up -d
 # 3. 群晖反代：travel.hanyueppy.synology.me(HTTPS:443) -> localhost:3006(HTTP)
 ```
 
-打开 `https://travel.hanyueppy.synology.me`。端口、反代细节见 [docs/wiki/部署指南.md](docs/wiki/部署指南.md)。
+打开 `https://travel.hanyueppy.synology.me`。端口、反代细节见 [部署指南（Wiki）](https://github.com/hanyuestar/travel-expense/wiki/部署指南)。
 
 ### 方式 B：使用预构建镜像（ghcr.io / Docker Hub）
 
@@ -68,18 +78,18 @@ node server.js                 # 默认端口 3000
 - **备份 / 导入**：右上角「备份 → 导出 JSON」离线备份；「导入数据」批量合并。
 - **直接改数据**：编辑 `data/routes.json`（标准 JSON），刷新即生效。
 
-完整说明见 [docs/wiki/](docs/wiki/Home.md)：
-- [功能能力](docs/wiki/功能能力.md)
-- [部署指南](docs/wiki/部署指南.md)
-- [数据与使用](docs/wiki/数据与使用.md)
+完整说明见 [项目 Wiki](https://github.com/hanyuestar/travel-expense/wiki)：
+- [功能能力](https://github.com/hanyuestar/travel-expense/wiki/功能能力)
+- [部署指南](https://github.com/hanyuestar/travel-expense/wiki/部署指南)
+- [数据与使用](https://github.com/hanyuestar/travel-expense/wiki/数据与使用)
 
 ---
 
 ## 🔒 数据存储与隐私
 
-- 真实数据在你自己的服务器挂载卷 `data/routes.json`，不在任何第三方云。
+- 所有路线与花费数据仅保存在你自己的服务器挂载卷 `data/routes.json`，不在任何第三方云。
 - 容器每次保存/删除后**同步写盘**，重启、崩溃均不丢数据（卷已挂载）。
-- **关于 IMA**：IMA 是文档知识库，无结构化读写 API，不适合做实时后端；可把仓库 `旅行手账_归档.md` 放进 IMA 作「只读旅行年鉴」，实时数据仍以本工作台为准。
+- 仓库内置的 `data/routes.json` 仅为**示例数据**，可随时在工作台内清空并替换为你的真实行程。
 
 ---
 
@@ -112,9 +122,8 @@ travel-expense/
 ├── package.json
 ├── server.js                            # 后端：托管页面 + /api/routes CRUD + 持久化
 ├── public/index.html                    # 前端工作台（响应式）
-├── data/routes.json                     # ★ 你的全部路线数据（挂载到容器 /data）
-├── docs/wiki/                           # Wiki 内容（GitHub Wiki 需手动复制这些 md）
-├── 旅行手账_归档.md                      # 供放入 IMA 的归档年鉴
+├── demo/index.html                      # 纯前端演示（无需后端，数据存浏览器）
+├── data/routes.json                     # 示例数据（挂载到容器 /data）
 └── README.md
 ```
 
@@ -126,3 +135,9 @@ travel-expense/
 - **数据没更新**：确认 `docker-compose.yml` 里 `./data:/data` 挂载正确。
 - **想换端口**：改 `docker-compose.yml` 的 `3006:3000` 左侧。
 - **迁移到新机器**：把整个 `travel-expense/`（含 `data/`）拷过去，`docker compose up -d`。
+
+---
+
+## 📄 版权与署名
+
+Copyright © Kyson. 本仓库为开源示例项目，仅供学习与交流使用。
