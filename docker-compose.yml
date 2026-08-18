@@ -1,16 +1,31 @@
+# 旅行经费工作台 · 多用户版 — 双容器编排
+# 前端 nginx（静态 + /api 反代） + 后端 node（better-sqlite3）
 services:
-  travel-expense:
-    # 方式一：本地构建（仓库根目录含 Dockerfile，便于随时改代码）
-    build: .
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
     # 方式二：直接使用预构建镜像（二选一，取消下一行注释即可）
-    # image: ghcr.io/hanyuestar/travel-expense:latest
-    # 切换到 Docker Hub 镜像：image: kyson666/travel-expense:latest
-    container_name: travel-expense
+    # image: ghcr.io/hanyuestar/travel-expense-frontend:latest
+    # image: kyson666/travel-expense-frontend:latest
+    container_name: travel-expense-frontend
     restart: unless-stopped
     ports:
-      - "3006:3000"   # 主机端口 3006 -> 容器 3000；改端口只需改这里
+      - "3006:80"   # 主机端口 3006 -> 前端 nginx 80；改端口只需改这里
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    # 方式二：直接使用预构建镜像（二选一，取消下一行注释即可）
+    # image: ghcr.io/hanyuestar/travel-expense-backend:latest
+    # image: kyson666/travel-expense-backend:latest
+    container_name: travel-expense-backend
+    restart: unless-stopped
     volumes:
-      # 关键：把宿主机目录挂到容器 /data，所有路线数据落在你的磁盘上
+      # 关键：把宿主机目录挂到容器 /data，所有路线数据（app.db）落在你的磁盘上
       - ./data:/data
     environment:
       - PORT=3000

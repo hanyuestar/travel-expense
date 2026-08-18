@@ -1,13 +1,16 @@
 {
   "name": "travel-expense-workbench",
-  "version": "1.0.0",
-  "description": "旅行路线 · 经费台 — 自托管工作台（数据存于挂载卷的 routes.json）",
-  "main": "server.js",
+  "version": "2.0.0",
+  "description": "旅行路线 · 经费台 — 多用户自托管工作台（前后端分离，数据存于挂载卷 app.db）",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server/app.js"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "nodemailer": "^6.9.15"
   },
   "license": "MIT"
 }
