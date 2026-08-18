@@ -34,19 +34,19 @@
 
 三种方式任选其一，数据都落在你自己的磁盘。
 
-### 方式 A：Docker 自托管到群晖 NAS（推荐，无需新域名）
+### 方式 A：Docker 自托管（含群晖 NAS 等）
 
-你已有 `survey.hanyueppy.synology.me` 的 DDNS + 反代，照同样方式加个子域（如 `travel.hanyueppy.synology.me`）即可。
+将本项目部署到任意支持 Docker 的机器（如 Synology NAS、云服务器）即可，对外域名由你自行决定。
 
 ```bash
-# 1. 把整个 travel-expense/ 传到 NAS（如 /volume1/docker/travel-expense/）
+# 1. 把整个 travel-expense/ 传到部署机（如 /volume1/docker/travel-expense/）
 # 2. 启动
 cd /volume1/docker/travel-expense
 docker compose up -d
-# 3. 群晖反代：travel.hanyueppy.synology.me(HTTPS:443) -> localhost:3006(HTTP)
+# 3. 反向代理（示例）：your-domain.example.com(HTTPS:443) -> localhost:3006(HTTP)
 ```
 
-打开 `https://travel.hanyueppy.synology.me`。端口、反代细节见 [部署指南（Wiki）](https://github.com/hanyuestar/travel-expense/wiki/部署指南)。
+打开 `https://your-domain.example.com`。端口、反代细节见 [部署指南（Wiki）](https://github.com/hanyuestar/travel-expense/wiki/部署指南)。域名与反代请按你自己的环境配置。
 
 ### 方式 B：使用预构建镜像（ghcr.io / Docker Hub）
 
