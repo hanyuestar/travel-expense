@@ -22,7 +22,8 @@ function verifyPassword(password, salt, hash) {
 
 /* ---------- 工具 ---------- */
 function genCode() {
-  return String(Math.floor(Math.random() * 1e6)).padStart(config.CODE_DIGITS, '0');
+  // 验证码必须用密码学安全随机源，杜绝 Math.random 可预测性
+  return String(crypto.randomInt(0, Math.pow(10, config.CODE_DIGITS))).padStart(config.CODE_DIGITS, '0');
 }
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

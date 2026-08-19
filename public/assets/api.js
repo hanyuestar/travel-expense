@@ -1,9 +1,20 @@
 /* api.js — fetch 封装 + 全局状态 + toast + 路由工具（ES Module） */
 export const store = {
   user: null,      // GET /api/auth/me 结果
-  site: { site_name: '旅行经费工作台', allow_register: true, register_mode: 'all', announce_text: '' },
+  site: { site_name: '旅行经费工作台', allow_register: true, register_mode: 'all', announce_text: '', home_currency: 'CNY', fx_rates: { CNY: 1 } },
   hideSeed: localStorage.getItem('te_hide_seed') === '1'
 };
+
+/* 把金额从 cur 换算到本位币（用公开汇率表，离线可用） */
+export function toHome(amount, cur) {
+  const rates = store.site.fx_rates || { CNY: 1 };
+  const home = store.site.home_currency || 'CNY';
+  const rf = rates[(cur || 'CNY').toUpperCase()];
+  const rt = rates[home.toUpperCase()];
+  const v = parseFloat(amount) || 0;
+  if (!rf || !rt) return v; // 未知币种不换算
+  return v * rf / rt;
+}
 
 export function toast(msg, ms = 2200) {
   let el = document.getElementById('toast');
@@ -103,6 +114,11 @@ export function fmt(n) {
   return n.toLocaleString('zh-CN');
 }
 export function addYen(n) { return '¥' + fmt(n); }
+
+/* 币种符号表（常用），未知币种回退代码本身 */
+const CUR_SYMBOLS = { CNY: '¥', HKD: 'HK$', MOP: 'MOP$', TWD: 'NT$', USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩', THB: '฿', SGD: 'S$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', CHF: 'Fr', MYR: 'RM', IDR: 'Rp', PHP: '₱', VND: '₫', INR: '₹', RUB: '₽' };
+export function curSymbol(c) { return CUR_SYMBOLS[(c || 'CNY').toUpperCase()] || (c || 'CNY'); }
+export function fmtMoney(n, cur) { return curSymbol(cur) + fmt(n); }
 export function parseStart(dr, year) {
   if (!dr) return null;
   let m = dr.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);

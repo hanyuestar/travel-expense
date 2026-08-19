@@ -13,12 +13,16 @@
 | **用户体系** | 邮箱注册（验证码）/ 账户名注册；登录支持「账号密码 / 邮箱验证码 / 邮箱密码」三种方式；服务端会话，封禁即时生效 |
 | **路线管理** | 录入 / 查看所有路线；字段含年份、出行日期、类型、天数、同行人数、目的地、景点路线（按天）、住宿位置；按年份筛选、关键字搜索 |
 | **花费明细** | 每条路线按 **9 类**拆分花费，自动算总额与人均；未填计 0，可随时补 |
+| **多币种** | 每条路线可选币种（CNY/USD/EUR/JPY 等 20+），统计按**站点本位币**自动换算聚合（内置汇率表兜底，可配置实时汇率源）；首页统计卡/图表统一显示本位币 |
+| **预算管控** | 每条路线可设总预算 / 日均预算，卡片显示进度条、超支红色高亮；首页统计卡显示总预算与结余 |
 | **年度复盘** | 按年汇总总花费 / 次数 / 次均 / 总天数；分类占比环形图 + 逐年趋势柱状图（手写 SVG，零外链） |
+| **数据导出导入** | 个人 CSV 导出（Excel 可开）/ JSON 导出导入（可往返备份还原）；管理员全站 CSV 导出（含用户名，审计留痕） |
+| **只读分享** | 本人路线可生成一次性只读链接（`/share/<token>`），无登录可看，随时可重置 / 撤销 |
 | **数据隔离** | 每位用户仅见自己的路线；系统示例（`is_seed=1`）全员可见但普通用户只读 |
-| **管理后台** | 平台总览、用户管理（在线/封禁/提权）、邮件服务器配置、站点设置（开放注册/站名/公告）、操作审计日志 |
+| **管理后台** | 平台总览、用户管理（在线/封禁/提权）、邮件服务器配置、站点设置（开放注册/站名/公告/本位币）、**数据库备份下载**、操作审计日志 |
 | **自适应** | 手机单列、PC 多列；浏览器「添加到主屏幕」即伪原生 App |
 
-技术特性：后端 Node 原生 `http`（零框架）+ `better-sqlite3`（唯一原生依赖）；前端原生 ES Modules 无构建；nginx 静态托管 + `/api` 反向代理；密码 `scrypt` 加盐哈希。
+技术特性：后端 Node 原生 `http`（零框架）+ `better-sqlite3`（唯一原生依赖）；前端原生 ES Modules 无构建；nginx 静态托管 + `/api` 反向代理；密码 `scrypt` 加盐哈希；验证码 CSPRNG 生成；写操作 CSRF 同源校验。
 
 ---
 
@@ -76,9 +80,13 @@ node app.js            # 默认端口 3000，数据在 ../data/app.db
 
 - **首次登录**：管理员 `admin / 123456`，登录后**强制修改密码**。
 - **注册**：登录页「去注册」→ 邮箱注册（需验证码，需先在后台配置 SMTP）或账户名注册。
-- **新增路线**：工作台右上角「新增路线」→ 填名称 / 年份 / 日期 / 类型 / 天数 / 人数 / 目的地 / 景点路线 / 住宿 / 9 类花费。
+- **新增路线**：工作台右上角「新增路线」→ 填名称 / 年份 / 日期 / 类型 / 天数 / 人数 / **币种** / **预算** / 目的地 / 景点路线 / 住宿 / 9 类花费。
+- **多币种**：路线币种选非本位币（如 USD），首页统计自动按本位币折算；管理员在「管理后台 → 站点设置」切换本位币。
+- **预算超支**：路线卡片上进度条变红即超支；首页统计卡可看总预算与结余。
+- **导出 / 导入**：工作台右上角「导出」下载 CSV；「导入」选择之前 JSON 导出的文件即可还原（每人仅操作自己的数据）。
+- **分享路线**：打开路线详情 → 「生成只读链接」→ 点击链接复制；再次生成会作废旧链接。
 - **年度复盘**：滚动到工作台下方，按年查看占比与趋势。
-- **管理后台**：管理员右上角「管理后台」→ 用户管理（封禁 / 提权）、邮件配置、站点设置、审计日志。
+- **管理后台**：管理员右上角「管理后台」→ 用户管理（封禁 / 提权）、邮件配置、站点设置、**全站 CSV 导出**、**数据库备份下载**、审计日志。
 - **示例数据**：系统示例全员可见、普通用户只读；可在个人视图勾选「隐藏系统示例」。
 
 ---
@@ -88,6 +96,21 @@ node app.js            # 默认端口 3000，数据在 ../data/app.db
 - 所有路线与花费数据仅保存在你自己的服务器挂载卷 `data/app.db`（SQLite），不在任何第三方云。
 - 每位用户数据互相隔离（`owner_id`）；非本人且非示例的路线返回 404，不泄露存在性。
 - 密码 `scrypt` 加盐哈希存储；会话 `HttpOnly + SameSite=Lax` Cookie；管理员可即时封禁（删除全部会话）。
+
+---
+
+## 🧪 开发与测试
+
+```bash
+cd travel-expense/server && npm install   # 安装依赖（better-sqlite3）
+node tests/run-all.js                     # 一条命令跑全部测试（主回归 84 例 + 深测 16 例 + 4 组功能冒烟）
+```
+
+- `tests/regression.test.js` / `regression.deep.test.js`：规格书全量回归（auth / routes / admin / 隔离 / 封禁 / 限流 / 邮件码）
+- `tests/smoke-*.test.js`：功能冒烟（多币种预算 / CSV 导出导入 / 只读分享 / 数据库备份），各自起隔离实例
+- CI（GitHub Actions，`.github/workflows/ci.yml`）：Node 18/20/22 三版本跑全部测试
+
+[![CI](https://github.com/hanyuestar/travel-expense/actions/workflows/ci.yml/badge.svg)](https://github.com/hanyuestar/travel-expense/actions/workflows/ci.yml)
 
 ---
 
@@ -114,33 +137,38 @@ node app.js            # 默认端口 3000，数据在 ../data/app.db
 
 ```
 travel-expense/
-├── .github/workflows/docker-image.yml   # 双注册表自动构建发布（frontend + backend）
-├── docker-compose.yml                   # 双容器编排（nginx 前端 + node 后端）
-├── Dockerfile.frontend                  # nginx 静态托管 + /api 反代
-├── Dockerfile.backend                   # node + better-sqlite3
-├── nginx.conf                           # 前端反代配置
-├── server/                              # 后端（Node 原生 http）
-│   ├── app.js                           # 入口、路由分发、静态兜底
-│   ├── config.js                        # 环境变量配置
-│   ├── db.js                            # better-sqlite3 建表 + seed（管理员/示例路线）
-│   ├── http.js                          # JSON 响应 / Cookie / 请求体工具
-│   ├── auth.js                          # 注册/登录/会话/封禁/改密
-│   ├── routes_api.js                    # 路线 CRUD（owner 隔离）+ 统计
-│   ├── admin_api.js                     # 管理后台接口
-│   ├── mailer.js                        # nodemailer SMTP 发码/测试邮件
+├── .github/workflows/
+│   ├── docker-image.yml               # 双注册表自动构建发布（frontend + backend）
+│   └── ci.yml                         # 测试 CI（Node 18/20/22）
+├── docker-compose.yml                 # 双容器编排（nginx 前端 + node 后端）
+├── Dockerfile.frontend                # nginx 静态托管 + /api 反代
+├── Dockerfile.backend                 # node + better-sqlite3
+├── nginx.conf                         # 前端反代配置
+├── server/                            # 后端（Node 原生 http）
+│   ├── app.js                         # 入口、路由分发、静态兜底、只读分享页
+│   ├── config.js                      # 环境变量配置
+│   ├── db.js                          # better-sqlite3 建表 + 幂等迁移 + seed
+│   ├── http.js                        # JSON 响应 / Cookie / 请求体工具
+│   ├── auth.js                        # 注册/登录/会话/封禁/改密（CSPRNG 验证码）
+│   ├── routes_api.js                  # 路线 CRUD（owner 隔离）+ 统计 + 导出导入 + 分享令牌
+│   ├── admin_api.js                   # 管理后台接口（含全站导出 / 数据库备份）
+│   ├── mailer.js                      # nodemailer SMTP 发码/测试邮件
+│   ├── fx.js                          # 多币种换算（静态汇率兜底 + 可选实时源）
+│   ├── csv.js                         # 轻量 CSV 序列化（零依赖）
 │   └── package.json
-├── public/                              # 前端（nginx 托管，ES Modules 无构建）
-│   ├── index.html                       # 应用外壳（hash 路由）
+├── public/                            # 前端（nginx 托管，ES Modules 无构建）
+│   ├── index.html                     # 应用外壳（hash 路由）
 │   ├── styles.css
 │   └── assets/
-│       ├── main.js                      # 路由守卫 + 启动
-│       ├── api.js                       # fetch 封装 + 全局状态
-│       ├── auth.js                      # 登录/注册页
-│       ├── app.js                       # 工作台（列表/统计/表单/个人中心）
-│       ├── admin.js                     # 管理后台 6 页
-│       └── charts.js                    # 手写 SVG 环形图/柱状图
-├── demo/index.html                      # 纯前端演示（单用户，数据存浏览器）
-├── data/                                # 运行时卷：app.db（gitignore）
+│       ├── main.js                    # 路由守卫 + 启动
+│       ├── api.js                     # fetch 封装 + 全局状态 + 汇率换算
+│       ├── auth.js                    # 登录/注册页
+│       ├── app.js                     # 工作台（列表/统计/表单/个人中心/分享）
+│       ├── admin.js                   # 管理后台 6 页
+│       └── charts.js                  # 手写 SVG 环形图/柱状图（本位币）
+├── tests/                             # 回归 + 冒烟测试（run-all.js 一键全跑）
+├── demo/index.html                    # 纯前端演示（单用户，数据存浏览器）
+├── data/                              # 运行时卷：app.db（gitignore）
 └── README.md
 ```
 

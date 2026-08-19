@@ -1,5 +1,5 @@
 /* charts.js — 手写 SVG 图表：环形图 donut + 柱状趋势 trend（沿用现有视觉） */
-import { fmt, addYen } from './api.js';
+import { fmt, curSymbol } from './api.js';
 
 export const CATS = ['交通', '机票', '高铁', '住宿', '餐饮', '门票', '团费', '购物', '其他'];
 export const COLORS = {
@@ -11,7 +11,7 @@ export function totalOf(r) {
   return CATS.reduce((s, c) => s + (parseFloat((r.exp && r.exp[c]) || 0) || 0), 0);
 }
 
-export function donut(data) {
+export function donut(data, cur) {
   const total = data.reduce((s, d) => s + d.value, 0);
   if (total <= 0) return '<div class="empty">暂无花费数据</div>';
   const r = 70, cx = 90, cy = 90, sw = 30, C = 2 * Math.PI * r;
@@ -23,11 +23,11 @@ export function donut(data) {
     off += len;
   });
   return `<svg viewBox="0 0 180 180" class="chart">${segs}
-    <text x="90" y="86" text-anchor="middle" class="donut-total">${addYen(total)}</text>
+    <text x="90" y="86" text-anchor="middle" class="donut-total">${money(total, cur)}</text>
     <text x="90" y="106" text-anchor="middle" class="donut-sub">总花费</text></svg>`;
 }
 
-export function trendBar(points, xLabelKey) {
+export function trendBar(points, xLabelKey, cur) {
   /* points: [{label, value}]，value 为金额 */
   if (!points.length) return '<div class="empty">暂无数据</div>';
   const W = 520, H = 200, pad = 30;
@@ -41,12 +41,14 @@ export function trendBar(points, xLabelKey) {
     const x = pad + gap + i * (bw + gap);
     const y0 = (H - 30) - h;
     s += `<rect x="${x}" y="${y0}" width="${bw}" height="${h}" rx="6" fill="${COLORS['机票']}"
-      opacity="${(0.55 + 0.45 * (p.value / max)).toFixed(2)}"><title>${esc(xLabelKey ? p[xLabelKey] : p.label)}：${addYen(p.value)}</title></rect>`;
-    s += `<text x="${x + bw / 2}" y="${y0 - 6}" text-anchor="middle" font-size="12" fill="#1f2d2b" font-weight="700">${fmt(p.value)}</text>`;
+      opacity="${(0.55 + 0.45 * (p.value / max)).toFixed(2)}"><title>${esc(xLabelKey ? p[xLabelKey] : p.label)}：${money(p.value, cur)}</title></rect>`;
+    s += `<text x="${x + bw / 2}" y="${y0 - 6}" text-anchor="middle" font-size="12" fill="#1f2d2b" font-weight="700">${money(p.value, cur)}</text>`;
     s += `<text x="${x + bw / 2}" y="${H - 10}" text-anchor="middle" font-size="12" fill="#6b7d79">${esc(p.label)}</text>`;
   });
   return s + '</svg>';
 }
+
+function money(n, cur) { return curSymbol(cur) + fmt(n); }
 
 function esc(s) {
   return (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

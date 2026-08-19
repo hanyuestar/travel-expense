@@ -1,28 +1,50 @@
 /* 路线 API：CRUD（owner 隔离 + 种子示例全员可见/只读）+ 统计
  * 鉴权：requireAuth 之后调用；req.user 已注入 */
 'use strict';
+const crypto = require('crypto');
 const { fail, ok, created } = require('./http');
 const dbModule = require('./db');
 const { authFromReq } = require('./auth');
+const { toCsv } = require('./csv');
 
 const db = () => dbModule.db;
+const fx = require('./fx');
 
-const ROUTE_COLS = `id, owner_id, is_seed, year, name, daterange, type, days, people, dest, scenic, hotel,
-  exp_traffic, exp_flight, exp_train, exp_hotel, exp_meal, exp_ticket, exp_group, exp_shopping, exp_other, notes, created_at, updated_at`;
+/* 本位币（站点设置，默认 CNY） */
+function homeCurrency() {
+  const s = db().prepare('SELECT home_currency FROM site_settings WHERE id = 1').get();
+  return (s && s.home_currency) || 'CNY';
+}
 
-/* 查询本人+种子（含个人隐藏开关过滤种子） */
-function listForUser(userId, { year, q, hideSeed }) {
-  let sql = `SELECT ${ROUTE_COLS} FROM routes WHERE (owner_id = ?`;
+/* 路由行投影列：与 db.js 单一来源，避免分叉缺列 */
+const ROUTE_COLS = dbModule.ROUTE_COLS;
+
+/* 个人导出 CSV 列头（与导入字段对应，可往返） */
+const CSV_HEAD = ['name', 'year', 'type', 'daterange', 'start_date', 'end_date', 'days', 'people', 'dest',
+  'currency', 'budget_total', 'budget_daily'].concat(dbModule.EXP_KEYS, ['scenic', 'hotel', 'notes']);
+
+/* 查询本人+种子（含个人隐藏开关过滤种子）；返回全量行（统计用） */
+function queryRoutes(userId, { year, q, hideSeed }) {
   const args = [userId];
-  if (!hideSeed) sql += ` OR is_seed = 1`;
-  sql += `)`;
-  if (year) { sql += ` AND year = ?`; args.push(String(year)); }
+  let where = `(owner_id = ?`;
+  if (!hideSeed) where += ` OR is_seed = 1`;
+  where += `)`;
+  if (year) { where += ` AND year = ?`; args.push(String(year)); }
   if (q) {
-    sql += ` AND (name LIKE ? OR dest LIKE ? OR scenic LIKE ?)`;
+    where += ` AND (name LIKE ? OR dest LIKE ? OR scenic LIKE ?)`;
     const like = `%${q}%`; args.push(like, like, like);
   }
-  sql += ` ORDER BY year DESC, created_at DESC`;
-  return db().prepare(sql).all(...args);
+  return db().prepare(`SELECT ${ROUTE_COLS} FROM routes WHERE ${where} ORDER BY year DESC, created_at DESC`).all(...args);
+}
+
+/* 列表（分页）：返回 {rows, total, page, pageSize} */
+function listForUser(userId, { year, q, hideSeed, page, pageSize }) {
+  const rows = queryRoutes(userId, { year, q, hideSeed });
+  const total = rows.length;
+  const lim = Math.min(200, Math.max(1, parseInt(pageSize) || 50));
+  const pg = Math.max(1, parseInt(page) || 1);
+  const slice = rows.slice((pg - 1) * lim, (pg - 1) * lim + lim);
+  return { rows: slice, total, page: pg, pageSize: lim };
 }
 
 function findVisible(id, userId) {
@@ -42,15 +64,17 @@ async function handle(req, res, url, body) {
   if (rest === '/stats/summary') return statsSummary(res, user, query);
   if (rest === '/stats/trend') return statsTrend(res, user, query);
 
-  /* GET /api/routes 列表 */
+  /* GET /api/routes 列表（分页） */
   if (rest === '' && method === 'GET') {
     const hideSeed = query.hideSeed === '1';
-    const list = listForUser(user.id, {
+    const { rows, total, page, pageSize } = listForUser(user.id, {
       year: query.year || '',
       q: query.q || '',
-      hideSeed
-    }).map(r => dbModule.routeToJson(r));
-    return ok(res, list);
+      hideSeed,
+      page: query.page,
+      pageSize: query.pageSize
+    });
+    return ok(res, { list: rows.map(r => dbModule.routeToJson(r)), total, page, pageSize });
   }
 
   /* POST /api/routes 新建 */
@@ -67,12 +91,80 @@ async function handle(req, res, url, body) {
     return ok(res, true);
   }
 
-  /* /:id 详情/更新/删除 */
+  /* GET /api/routes/export?fmt=csv|json — 个人导出（仅本人数据，不含示例） */
+  if (rest === '/export' && method === 'GET') {
+    const rows = queryRoutes(user.id, { year: query.year || '', q: '', hideSeed: true });
+    if (query.fmt === 'json') return ok(res, { count: rows.length, routes: rows.map(r => dbModule.routeToJson(r)) });
+    const head = CSV_HEAD;
+    const data = rows.map(r => {
+      const j = dbModule.routeToJson(r);
+      return CSV_HEAD.map(h => {
+        if (dbModule.EXP_KEYS.includes(h)) return dbModule.num(j.exp[h]);
+        if (h === 'days' || h === 'people' || h === 'budget_total' || h === 'budget_daily') return dbModule.num(j[h]);
+        return j[h];
+      });
+    });
+    res.writeHead(200, {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="travel-expense.csv"'
+    });
+    return res.end(toCsv(head, data));
+  }
+
+  /* POST /api/routes/import — 个人 JSON 导入（新增为本人路线，仅白名单字段） */
+  if (rest === '/import' && method === 'POST') {
+    if (!body || !Array.isArray(body.routes)) return fail(res, 400, '格式应为 { routes: [...] }');
+    if (body.routes.length > 2000) return fail(res, 400, '单次导入上限 2000 条');
+    let created = 0, skipped = 0;
+    const errors = [];
+    body.routes.forEach((item, i) => {
+      if (!item || typeof item !== 'object' || !String(item.name || '').trim()) {
+        skipped++; errors.push('第 ' + (i + 1) + ' 条缺少名称，已跳过');
+        return;
+      }
+      const clean = {
+        name: String(item.name), year: String(item.year || ''), type: String(item.type || '自由行'),
+        daterange: String(item.daterange || ''), start_date: String(item.start_date || ''), end_date: String(item.end_date || ''),
+        days: parseInt(item.days) || 0, people: parseInt(item.people) || 0,
+        dest: String(item.dest || ''), scenic: String(item.scenic || ''), hotel: String(item.hotel || ''),
+        currency: String(item.currency || 'CNY'), budget_total: dbModule.num(item.budget_total), budget_daily: dbModule.num(item.budget_daily),
+        exp: (item.exp && typeof item.exp === 'object') ? item.exp : {},
+        notes: String(item.notes || '')
+      };
+      dbModule.insertRoute(user.id, clean, false);
+      created++;
+    });
+    return ok(res, { created, skipped, errors });
+  }
+
+  /* /:id 详情/更新/删除 + /:id/share 只读分享 */
   if (rest.startsWith('/')) {
-    const id = decodeURIComponent(rest.slice(1));
+    const isShare = rest.endsWith('/share');
+    const id = decodeURIComponent((isShare ? rest.slice(0, -6) : rest).slice(1));
     if (!id) return fail(res, 404, '路线不存在');
     const row = findVisible(id, user.id);
     if (!row) return fail(res, 404, '路线不存在');
+
+    /* 分享令牌管理：仅本人或管理员 */
+    if (isShare) {
+      const own = row.owner_id === user.id || user.role === 'admin';
+      if (method === 'GET') {
+        if (!own) return fail(res, 403, '无权查看该路线的分享', { code: 'FORBIDDEN' });
+        return ok(res, { token: dbModule.getShareToken(id) });
+      }
+      if (method === 'POST') {
+        if (!own) return fail(res, 403, '无权分享该路线', { code: 'FORBIDDEN' });
+        const token = crypto.randomBytes(16).toString('hex');
+        dbModule.setShareToken(id, token);
+        return ok(res, { token });
+      }
+      if (method === 'DELETE') {
+        if (!own) return fail(res, 403, '无权取消该路线的分享', { code: 'FORBIDDEN' });
+        dbModule.clearShareToken(id);
+        return ok(res, true);
+      }
+      return fail(res, 404, '接口不存在');
+    }
 
     if (method === 'GET') {
       return ok(res, dbModule.routeToJson(row));
@@ -107,7 +199,8 @@ const CATS = dbModule.EXP_KEYS; // ['交通','机票',...]
 function statsSummary(res, user, query) {
   const hideSeed = query.hideSeed === '1';
   const year = query.year || '';
-  const rows = listForUser(user.id, { year, hideSeed });
+  const home = homeCurrency();
+  const rows = queryRoutes(user.id, { year, hideSeed });
   const byYear = {};
   const totals = {};
   CATS.forEach(c => (totals[c] = 0));
@@ -116,35 +209,46 @@ function statsSummary(res, user, query) {
     const y = r.year || '未标注';
     if (!byYear[y]) byYear[y] = { year: y, count: 0, days: 0, total: 0, exp: {} };
     const e = dbModule.routeToJson(r).exp;
+    const cur = r.currency || 'CNY';
     let t = 0;
     for (const c of CATS) {
-      const v = dbModule.num(e[c]);
-      byYear[y].exp[c] = (byYear[y].exp[c] || 0) + v;
-      totals[c] += v; t += v;
+      const conv = fx.convert(dbModule.num(e[c]), cur, home).value;
+      byYear[y].exp[c] = (byYear[y].exp[c] || 0) + conv;
+      totals[c] += conv; t += conv;
     }
     byYear[y].total += t; byYear[y].count += 1; byYear[y].days += (r.days || 0);
     grand += t; count += 1; days += (r.days || 0);
   }
   const years = Object.keys(byYear).sort((a, b) => b.localeCompare(a));
+  let budgetTotal = 0;
+  for (const r of rows) budgetTotal += fx.convert(dbModule.num(r.budget_total), r.currency || 'CNY', home).value;
+  const remaining = budgetTotal - grand;
   return ok(res, {
     grand, count, days,
     totalByCat: totals,
     byYear: years.map(y => byYear[y]),
-    years
+    years,
+    homeCurrency: home,
+    budgetTotal,
+    remaining,
+    overBudget: grand > budgetTotal && budgetTotal > 0
   });
 }
 
 function statsTrend(res, user, query) {
   const hideSeed = query.hideSeed === '1';
-  const rows = listForUser(user.id, { hideSeed });
+  const home = homeCurrency();
+  const rows = queryRoutes(user.id, { hideSeed });
   const byMonth = {};
   for (const r of rows) {
-    const d = parseDate(r.daterange, r.year);
-    if (!d) continue;
-    const key = d.year + '-' + String(d.month).padStart(2, '0');
+    let key = null;
+    if (r.start_date) key = r.start_date.slice(0, 7);
+    else { const d = parseDate(r.daterange, r.year); if (d) key = d.year + '-' + String(d.month).padStart(2, '0'); }
+    if (!key) continue;
     const t = dbModule.routeToJson(r).exp;
+    const cur = r.currency || 'CNY';
     let sum = 0;
-    for (const c of CATS) sum += dbModule.num(t[c]);
+    for (const c of CATS) sum += fx.convert(dbModule.num(t[c]), cur, home).value;
     if (!byMonth[key]) byMonth[key] = { month: key, total: 0 };
     byMonth[key].total += sum;
   }

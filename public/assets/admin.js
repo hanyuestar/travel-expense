@@ -1,5 +1,5 @@
 /* admin.js — 管理后台（总览/用户/邮件/站点/审计） */
-import { store, toast, api, esc, fmt, fmtTime, addYen } from './api.js';
+import { store, toast, api, esc, fmt, fmtTime } from './api.js';
 
 const NAV = [
   ['overview', '平台总览', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>'],
@@ -68,9 +68,36 @@ async function renderOverview(box) {
           <button class="btn btn-line" data-goto="email">邮件配置</button>
           <button class="btn btn-line" data-goto="site">站点设置</button>
           <button class="btn btn-line" data-goto="audit">审计日志</button>
+          <button class="btn btn-line" id="adminExportBtn">导出全站 CSV</button>
+          <button class="btn btn-line" id="adminBackupBtn">备份数据库</button>
         </div>
       </div>`;
     box.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => { location.hash = '#/admin/' + b.dataset.goto; });
+    box.querySelector('#adminBackupBtn').onclick = async () => {
+      try {
+        const r = await fetch('/api/admin/db-backup', { credentials: 'same-origin' });
+        if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.msg) || '备份失败'); }
+        const blob = await r.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'travel-expense-backup-' + new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15) + '.db';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        toast('数据库备份已下载');
+      } catch (e) { toast('备份失败：' + e.message); }
+    };
+    box.querySelector('#adminExportBtn').onclick = async () => {
+      try {
+        const r = await fetch('/api/admin/export?fmt=csv', { credentials: 'same-origin' });
+        if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.msg) || '导出失败'); }
+        const blob = await r.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'all-routes.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } catch (e) { toast('导出失败：' + e.message); }
+    };
   } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 

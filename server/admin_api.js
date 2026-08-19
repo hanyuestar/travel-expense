@@ -8,6 +8,7 @@ const { fail, ok } = require('./http');
 const { authFromReq, publicUser } = require('./auth');
 const mailer = require('./mailer');
 const dbModule = require('./db');
+const { toCsv } = require('./csv');
 
 const db = () => dbModule.db;
 
@@ -154,17 +155,55 @@ async function handle(req, res, url, body) {
       site_name: s.site_name || '旅行经费工作台',
       allow_register: !!s.allow_register,
       register_mode: s.register_mode || 'all',
-      announce_text: s.announce_text || ''
+      announce_text: s.announce_text || '',
+      home_currency: s.home_currency || 'CNY'
     });
   }
   if (rest === '/site-settings' && method === 'PUT') {
     const b = body || {};
-    db().prepare(`UPDATE site_settings SET site_name=?, allow_register=?, register_mode=?, announce_text=?, updated_at=?, updated_by=? WHERE id=1`)
+    const home = (b.home_currency && /^[A-Za-z]{3}$/.test(b.home_currency)) ? b.home_currency.toUpperCase() : 'CNY';
+    db().prepare(`UPDATE site_settings SET site_name=?, allow_register=?, register_mode=?, announce_text=?, home_currency=?, updated_at=?, updated_by=? WHERE id=1`)
       .run(String(b.site_name || '旅行经费工作台'), b.allow_register ? 1 : 0,
         ['all', 'email_only', 'username_only'].includes(b.register_mode) ? b.register_mode : 'all',
-        String(b.announce_text || ''), Date.now(), admin.id);
+        String(b.announce_text || ''), home, Date.now(), admin.id);
     audit(admin.id, 'update_site_settings', 'site_settings', '1', '更新站点设置', ip);
     return ok(res, true);
+  }
+
+  /* ---------- 全站数据导出（CSV，含归属用户名；审计留痕） ---------- */
+  if (rest === '/export' && method === 'GET') {
+    const rows = db().prepare(
+      `SELECT u.username AS owner_name, r.* FROM routes r JOIN users u ON u.id = r.owner_id ORDER BY r.created_at DESC`).all();
+    const head = ['owner_name'].concat(dbModule.ROUTE_COLS.split(',').map(s => s.trim()));
+    const data = rows.map(r => head.map(h => {
+      if (dbModule.EXP_KEYS.includes(h)) return dbModule.num(r[dbModule.EXP_COL[h]]);
+      if (h === 'is_seed') return r[h] ? 1 : 0;
+      if (h === 'owner_id') return r.owner_id;
+      return r[h] == null ? '' : r[h];
+    }));
+    audit(admin.id, 'export_routes', 'routes', null, '全站导出 CSV（' + rows.length + ' 条）', ip);
+    res.writeHead(200, {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="all-routes.csv"'
+    });
+    return res.end(toCsv(head, data));
+  }
+
+  /* ---------- 数据库备份下载（WAL 合并后导出，审计留痕） ---------- */
+  if (rest === '/db-backup' && method === 'GET') {
+    const dbPath = path.join(config.DATA_DIR, config.DB_FILE);
+    if (!fs.existsSync(dbPath)) return fail(res, 404, '数据库文件不存在');
+    try { db().pragma('wal_checkpoint(TRUNCATE)'); } catch (e) { /* WAL 可能不存在 */ }
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const stamp = d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+    audit(admin.id, 'db_backup', 'db', null, '下载数据库备份', ip);
+    const data = fs.readFileSync(dbPath);
+    res.writeHead(200, {
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="travel-expense-backup-${stamp}.db"`
+    });
+    return res.end(data);
   }
 
   /* ---------- 审计日志 ---------- */

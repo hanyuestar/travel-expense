@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Syntax check (server)
+        working-directory: server
+        run: |
+          for f in app.js auth.js admin_api.js routes_api.js db.js config.js http.js mailer.js fx.js csv.js; do
+            node --check "$f" || exit 1
+          done
+
+      - name: Syntax check (frontend ES modules)
+        working-directory: public
+        run: |
+          for f in assets/*.js; do
+            node --input-type=module --check < "$f" || exit 1
+          done
+
+      - name: Run full test suite
+        run: node tests/run-all.js
