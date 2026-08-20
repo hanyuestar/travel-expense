@@ -26,11 +26,23 @@
         <div class="user-chip" id="userMenuBtn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           <span id="userName">…</span>
+          <svg class="user-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M6 9l6 6 6-6"/></svg>
         </div>
         <div class="menu-panel" id="userMenu">
-          <button id="profileLink">👤 个人中心</button>
-          <button id="adminLink" style="display:none">🛡 管理后台</button>
-          <button id="logoutBtn" style="color:var(--danger)">↩ 退出登录</button>
+          <div class="menu-head" id="menuHead"><span class="menu-head-name" id="menuHeadName">…</span><span class="menu-head-role" id="menuHeadRole">用户</span></div>
+          <button class="menu-item" id="profileLink">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg>
+            <span>个人中心</span>
+          </button>
+          <button class="menu-item" id="adminLink" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+            <span>管理后台</span>
+          </button>
+          <div class="menu-sep"></div>
+          <button class="menu-item menu-item-danger" id="logoutBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+            <span>退出登录</span>
+          </button>
         </div>
       </div>
     </div>

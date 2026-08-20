@@ -86,7 +86,12 @@ export function renderWorkbench() {
     e.target.value = '';
   };
   document.querySelectorAll('[data-fy]').forEach(c => {
-    c.onclick = () => { state.filterYear = c.dataset.fy; renderRoutes(); };
+    c.onclick = () => {
+      state.filterYear = c.dataset.fy;
+      /* 同步 chip 高亮：renderRoutes 只重绘路线网格，不重渲染 chip 行 */
+      document.querySelectorAll('[data-fy]').forEach(x => x.classList.toggle('active', x === c));
+      renderRoutes();
+    };
   });
   document.getElementById('routeGrid').onclick = onGridClick;
   renderRoutes();

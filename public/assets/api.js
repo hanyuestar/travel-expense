@@ -92,6 +92,11 @@ export function renderHeader() {
     document.getElementById('userName').textContent = name;
     const adminLink = document.getElementById('adminLink');
     if (adminLink) adminLink.style.display = u.role === 'admin' ? '' : 'none';
+    /* 菜单头部：用户名 + 角色徽章 */
+    const headName = document.getElementById('menuHeadName');
+    if (headName) headName.textContent = name;
+    const headRole = document.getElementById('menuHeadRole');
+    if (headRole) headRole.textContent = u.role === 'admin' ? '管理员' : '用户';
   } else {
     box.classList.add('hidden');
     guest.classList.remove('hidden');

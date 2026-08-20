@@ -3,3 +3,7 @@ npm-debug.log
 *.log
 .DS_Store
 .git/
+# 运行时数据卷（本地开发会产生 app.db，严禁入库）
+data/*.db
+data/*.db-shm
+data/*.db-wal
