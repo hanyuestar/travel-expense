@@ -1,32 +1,17 @@
-# 旅行经费工作台 · 多用户版 — 双容器编排
-# 前端 nginx（静态 + /api 反代） + 后端 node（better-sqlite3）
+# 旅行经费工作台 · 多用户版 — 单容器全栈编排
+# 前端静态资源由后端内置托管（端口 3000 直出），复制本文件即可安装：
+#   1. 在宿主机建数据目录（如 /volume1/docker/travel）并 chmod 可写
+#   2. 把本文件放到该目录，执行：docker compose up -d
+#   3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
 services:
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    # 方式二：直接使用预构建镜像（二选一，取消下一行注释即可）
-    # image: ghcr.io/hanyuestar/travel-expense-frontend:latest
-    # image: kyson666/travel-expense-frontend:latest
-    container_name: travel-expense-frontend
+  travel-expense:
+    image: ghcr.io/hanyuestar/travel-expense:v1.0.1
+    container_name: travel-expense
     restart: unless-stopped
     ports:
-      - "3006:80"   # 主机端口 3006 -> 前端 nginx 80；改端口只需改这里
-    depends_on:
-      - backend
-
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
-    # 方式二：直接使用预构建镜像（二选一，取消下一行注释即可）
-    # image: ghcr.io/hanyuestar/travel-expense-backend:latest
-    # image: kyson666/travel-expense-backend:latest
-    container_name: travel-expense-backend
-    restart: unless-stopped
+      - "8108:3000"   # 主机端口 8108 -> 容器 3000；想换端口只改左侧数字
     volumes:
-      # 关键：把宿主机目录挂到容器 /data，所有路线数据（app.db）落在你的磁盘上
-      - ./data:/data
+      - /volume1/docker/travel:/data   # 数据持久化：app.db 与种子都在这，务必改成你的目录
     environment:
       - PORT=3000
       - DATA_DIR=/data

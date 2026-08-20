@@ -22,7 +22,7 @@
 | **管理后台** | 平台总览、用户管理（在线/封禁/提权）、邮件服务器配置、站点设置（开放注册/站名/公告/本位币）、**数据库备份下载**、操作审计日志 |
 | **自适应** | 手机单列、PC 多列；浏览器「添加到主屏幕」即伪原生 App |
 
-技术特性：后端 Node 原生 `http`（零框架）+ `better-sqlite3`（唯一原生依赖）；前端原生 ES Modules 无构建；nginx 静态托管 + `/api` 反向代理；密码 `scrypt` 加盐哈希；验证码 CSPRNG 生成；写操作 CSRF 同源校验。
+技术特性：后端 Node 原生 `http`（零框架）+ `better-sqlite3`（唯一原生依赖）；前端原生 ES Modules 无构建，**由后端内置托管**（单容器部署，端口 3000 直出）；密码 `scrypt` 加盐哈希；验证码 CSPRNG 生成；写操作 CSRF 同源校验。
 
 ---
 
@@ -38,40 +38,58 @@
 
 ## 🚀 部署方法
 
-三种方式任选其一，数据都落在你自己的磁盘。
+### 方式 A：Docker Compose 自托管（单容器，推荐）
 
-### 方式 A：Docker Compose 自托管（双容器）
-
-```bash
-# 1. 把整个 travel-expense/ 传到部署机（如 /volume1/docker/travel-expense/）
-# 2. 启动（前端 nginx :80 + 后端 node :3000）
-cd /volume1/docker/travel-expense
-docker compose up -d --build
-# 3. 反向代理（示例）：your-domain.example.com(HTTPS:443) -> localhost:3006(HTTP)
-```
-
-打开 `https://your-domain.example.com`。端口、反代细节见 [部署指南（Wiki）](https://github.com/hanyuestar/travel-expense/wiki/部署指南)。域名与反代请按你自己的环境配置。
-
-### 方式 B：使用预构建镜像（ghcr.io / Docker Hub）
+镜像为**全栈单容器**（后端内置托管前端页面，端口 3000 直出），复制下面文件即可安装：
 
 ```bash
-# 前端
-docker run -d --name travel-expense-frontend -p 3006:80 \
-  ghcr.io/hanyuestar/travel-expense-frontend:latest   # 或 kyson666/travel-expense-frontend:latest
-# 后端
-docker run -d --name travel-expense-backend -p 3000:3000 -v /your/path/data:/data \
-  ghcr.io/hanyuestar/travel-expense-backend:latest    # 或 kyson666/travel-expense-backend:latest
+# 1. 建数据目录并放入 compose 文件（以群晖为例）
+mkdir -p /volume1/docker/travel
+cd /volume1/docker/travel
+curl -O https://raw.githubusercontent.com/hanyuestar/travel-expense/main/docker-compose.yml
+
+# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.1）
+docker compose up -d
+
+# 3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
 ```
 
-> 注意：前端 nginx 反代 `/api` 到 `backend:3000`，使用 docker compose 时服务名 `backend` 已配好；手动分别运行时需在 nginx 配置中调整 `proxy_pass`。
+`docker-compose.yml`（也可直接复制粘贴保存）：
+
+```yaml
+services:
+  travel-expense:
+    image: ghcr.io/hanyuestar/travel-expense:v1.0.1
+    container_name: travel-expense
+    restart: unless-stopped
+    ports:
+      - "8108:3000"   # 想换端口只改左侧
+    volumes:
+      - /volume1/docker/travel:/data   # 数据持久化（app.db），务必改成你的目录
+    environment:
+      - PORT=3000
+      - DATA_DIR=/data
+```
+
+> 首次启动会自动写入示例路线数据；数据只存在你的磁盘上（`/volume1/docker/travel/app.db`）。
+> 如需 HTTPS 域名访问，反代示例：`https://your-domain.example.com -> 127.0.0.1:8108`。
+
+### 方式 B：直接 docker run（不装 compose）
+
+```bash
+docker run -d --name travel-expense \
+  -p 8108:3000 \
+  -v /your/path/data:/data \
+  --restart unless-stopped \
+  ghcr.io/hanyuestar/travel-expense:v1.0.1
+```
 
 ### 方式 C：手动运行（无 Docker，需 Node 18+）
 
 ```bash
 cd travel-expense/server
 npm install            # 编译 better-sqlite3
-node app.js            # 默认端口 3000，数据在 ../data/app.db
-# 前端：把 public/ 交给任意静态服务器，并反代 /api 到 :3000
+node app.js            # 默认端口 3000；后端自动托管 public/ 前端，数据在 ../data/app.db
 ```
 
 ---
@@ -116,17 +134,17 @@ node tests/run-all.js                     # 一条命令跑全部测试（主回
 
 ## 🐳 镜像发布方式（维护者参考）
 
-代码推送到 GitHub 后，镜像通过 **GitHub Actions 自动双注册表发布**：
+代码推送到 GitHub 后，**全栈单镜像**通过 GitHub Actions 自动发布到双注册表：
 
-1. 仓库已配置 Actions Secret：`DOCKERHUB_USERNAME`、`DOCKERHUB_TOKEN`（ghcr 用自动注入的 `GITHUB_TOKEN`，无需配置）。
-2. 打版本 tag 并推送即触发构建（后端 + 前端两个镜像）：
+1. ghcr 发布无需配置（自动注入 `GITHUB_TOKEN`）；Docker Hub 需配置 Secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（未配置则自动跳过 Docker Hub，不影响 ghcr）。
+2. 打版本 tag 并推送即触发构建（linux/amd64 + arm64 双架构）：
    ```bash
-   git tag -a v2.0.0 -m "v2.0.0 multi-user"
+   git tag -a v1.0.1 -m "v1.0.1 single-image"
    git push origin main --tags
    ```
-3. Actions 把镜像推到：
-   - `ghcr.io/hanyuestar/travel-expense-frontend` / `kyson666/travel-expense-frontend`
-   - `ghcr.io/hanyuestar/travel-expense-backend` / `kyson666/travel-expense-backend`
+3. 镜像推送到：
+   - `ghcr.io/hanyuestar/travel-expense`（必推）
+   - `kyson666/travel-expense`（Docker Hub，可选）
 4. 也可在仓库 Actions 页面手动 `workflow_dispatch` 触发。
 
 工作流文件见 [`.github/workflows/docker-image.yml`](.github/workflows/docker-image.yml)。
@@ -138,14 +156,13 @@ node tests/run-all.js                     # 一条命令跑全部测试（主回
 ```
 travel-expense/
 ├── .github/workflows/
-│   ├── docker-image.yml               # 双注册表自动构建发布（frontend + backend）
+│   ├── docker-image.yml               # 单镜像双注册表自动发布（amd64+arm64）
 │   └── ci.yml                         # 测试 CI（Node 18/20/22）
-├── docker-compose.yml                 # 双容器编排（nginx 前端 + node 后端）
-├── Dockerfile.frontend                # nginx 静态托管 + /api 反代
-├── Dockerfile.backend                 # node + better-sqlite3
-├── nginx.conf                         # 前端反代配置
-├── server/                            # 后端（Node 原生 http）
-│   ├── app.js                         # 入口、路由分发、静态兜底、只读分享页
+├── Dockerfile                         # 全栈单镜像（node 后端 + 内置前端静态）
+├── docker-entrypoint.sh               # 容器入口（种子兜底 + 启动后端）
+├── docker-compose.yml                 # 单服务编排（复制即可用）
+├── server/                            # 后端（Node 原生 http，同时托管 public/）
+│   ├── app.js                         # 入口、路由分发、静态托管、只读分享页
 │   ├── config.js                      # 环境变量配置
 │   ├── db.js                          # better-sqlite3 建表 + 幂等迁移 + seed
 │   ├── http.js                        # JSON 响应 / Cookie / 请求体工具
@@ -156,7 +173,7 @@ travel-expense/
 │   ├── fx.js                          # 多币种换算（静态汇率兜底 + 可选实时源）
 │   ├── csv.js                         # 轻量 CSV 序列化（零依赖）
 │   └── package.json
-├── public/                            # 前端（nginx 托管，ES Modules 无构建）
+├── public/                            # 前端（后端内置托管，ES Modules 无构建）
 │   ├── index.html                     # 应用外壳（hash 路由）
 │   ├── styles.css
 │   └── assets/
@@ -168,7 +185,7 @@ travel-expense/
 │       └── charts.js                  # 手写 SVG 环形图/柱状图（本位币）
 ├── tests/                             # 回归 + 冒烟测试（run-all.js 一键全跑）
 ├── demo/index.html                    # 纯前端演示（单用户，数据存浏览器）
-├── data/                              # 运行时卷：app.db（gitignore）
+├── data/                              # 运行时卷：app.db + 种子 routes.json（gitignore）
 └── README.md
 ```
 
@@ -176,12 +193,12 @@ travel-expense/
 
 ## ❓ 常见问题
 
-- **页面打不开**：`docker compose ps` 看容器状态；`curl http://localhost:3006/api/public/site` 看后端连通性。
+- **页面打不开**：`docker compose ps` 看容器状态；`curl http://localhost:8108/api/public/site` 看后端连通性。
 - **登录提示「禁止用户登录」**：该账号被管理员封禁，请联系管理员解封。
 - **邮箱验证码收不到**：先到「管理后台 → 邮件配置」填好 SMTP 并「发送测试邮件」验证。
-- **数据没更新**：确认 `docker-compose.yml` 里 `./data:/data` 挂载正确。
-- **想换端口**：改 `docker-compose.yml` 的 `3006:80` 左侧。
-- **迁移到新机器**：把整个 `travel-expense/`（含 `data/`）拷过去，`docker compose up -d --build`。
+- **数据没更新**：确认 `docker-compose.yml` 里 `/volume1/docker/travel:/data` 挂载正确。
+- **想换端口**：改 `docker-compose.yml` 的 `8108:3000` 左侧。
+- **迁移到新机器**：把数据目录（含 `app.db`）拷到新机器并改 compose 挂载路径，`docker compose up -d`。
 
 ---
 
