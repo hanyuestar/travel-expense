@@ -12,9 +12,9 @@ WORKDIR /app
 COPY server/package.json server/package-lock.json ./
 RUN npm install --omit=dev
 
-# 后端代码 + 前端静态资源（后端 /public 自动托管，app.js 零改动）
+# 后端代码 + 前端静态资源（app.js 通过 __dirname/../public 托管，须与 server/ 同层）
 COPY server/ ./
-COPY public/ /public/
+COPY public/ ./public/
 
 # 默认示例数据：首次启动由 entrypoint 复制到挂载卷（不覆盖已有数据）
 COPY data/routes.json /opt/seed/routes.json
