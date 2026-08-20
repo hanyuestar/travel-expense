@@ -7,13 +7,16 @@ on:
   workflow_dispatch:
 
 jobs:
-  # GitHub Container Registry：必推（GITHUB_TOKEN 自动注入）
-  push-ghcr:
-    name: Push to GHCR
+  push:
+    name: Push single image (GHCR always, Docker Hub optional)
     runs-on: ubuntu-latest
     permissions:
       packages: write
       contents: read
+    env:
+      # secrets 不能在 job 级 if 直接用，先注入 env，步骤级 if 判断
+      DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+      DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
@@ -35,61 +38,49 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels)
-        id: meta
+      - name: Log in to Docker Hub (optional)
+        if: ${{ env.DH_USER != '' && env.DH_TOKEN != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DH_USER }}
+          password: ${{ env.DH_TOKEN }}
+
+      # --- GHCR：必推 ---
+      - name: Extract metadata for GHCR
+        id: meta_ghcr
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
           flavor: |
             latest=true
 
-      - name: Build and push
+      - name: Build and push to GHCR
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta_ghcr.outputs.tags }}
+          labels: ${{ steps.meta_ghcr.outputs.labels }}
 
-  # Docker Hub：可选（需配置 DOCKERHUB_USERNAME/DOCKERHUB_TOKEN Secrets），
-  # 未配置时跳过，不影响 GHCR 发布
-  push-dockerhub:
-    name: Push to Docker Hub
-    if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
-    runs-on: ubuntu-latest
-    needs: push-ghcr
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels)
-        id: meta
+      # --- Docker Hub：可选（未配置 Secrets 时自动跳过） ---
+      - name: Extract metadata for Docker Hub
+        id: meta_dh
+        if: ${{ env.DH_USER != '' && env.DH_TOKEN != '' }}
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/travel-expense
+          images: ${{ env.DH_USER }}/travel-expense
           flavor: |
             latest=true
 
-      - name: Build and push
+      - name: Build and push to Docker Hub
+        if: ${{ env.DH_USER != '' && env.DH_TOKEN != '' }}
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta_dh.outputs.tags }}
+          labels: ${{ steps.meta_dh.outputs.labels }}
