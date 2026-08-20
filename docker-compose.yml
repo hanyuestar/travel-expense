@@ -7,7 +7,8 @@
 # 日志查看（两种方式，二选一）：
 #   A. 实时容器控制台： docker compose logs -f
 #   B. 持久化到挂载卷： tail -F /volume1/docker/travel/logs/app.log
-#      （logs/ 子目录由容器首次启动自动建在 $DATA_DIR 下）
+#      注意：不需要单独挂载 logs 目录！entrypoint 自动在 $DATA_DIR 下创建 logs/ 子目录，
+#      因此日志文件和 app.db 共享同一个数据卷，随数据一起持久化迁移
 services:
   travel-expense:
     image: ghcr.io/hanyuestar/travel-expense:v1.0.2

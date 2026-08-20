@@ -74,7 +74,7 @@ services:
 > 首次启动会自动写入示例路线数据；数据只存在你的磁盘上（`/volume1/docker/travel/app.db`）。
 > 如需 HTTPS 域名访问，反代示例：`https://your-domain.example.com -> 127.0.0.1:8108`。
 
-> **📋 容器日志查看**（两种方式互不冲突）：
+> **📋 容器日志查看**（无需单独挂载 logs 目录，entrypoint 自动在数据卷内部创建 logs/ 子目录）：
 >
 > | 用途 | 命令 | 备注 |
 > |---|---|---|
