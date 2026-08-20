@@ -14,7 +14,7 @@ export function renderLogin() {
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-logo">${ICON}${esc(siteName)}</div>
-      <div class="auth-sub">管理历年出行路线与花费 · 数据存于你自己的服务器</div>
+      <div class="auth-sub">管理历年出行路线与花费 · 多用户</div>
       <div class="tabs">
         <div class="tab ${mode === 'password' ? 'active' : ''}" data-login-mode="password">账号密码</div>
         <div class="tab ${mode === 'code' ? 'active' : ''}" data-login-mode="code">邮箱验证码</div>
@@ -34,7 +34,7 @@ export function renderLogin() {
         <button class="btn btn-primary btn-block" id="lg_submit">登 录</button>
       </div>
       <div class="auth-foot">${allowReg ? '<a href="#/register">还没有账号？去注册</a>' : '注册已关闭，请联系管理员'}</div>
-      <div class="auth-copy">© Kyson · 开源自托管</div>
+      <div class="auth-copy">© Kyson 原创技术支持</div>
     </div>
   </div>`;
 
@@ -81,7 +81,7 @@ export function renderRegister() {
         <button class="btn btn-primary btn-block" id="rg_submit">注 册</button>
       </div>
       <div class="auth-foot"><a href="#/login">已有账号？去登录</a></div>
-      <div class="auth-copy">© Kyson · 开源自托管</div>
+      <div class="auth-copy">© Kyson 原创技术支持</div>
     </div>
   </div>`;
 
