@@ -48,7 +48,7 @@ mkdir -p /volume1/docker/travel
 cd /volume1/docker/travel
 curl -O https://raw.githubusercontent.com/hanyuestar/travel-expense/main/docker-compose.yml
 
-# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.1）
+# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.2）
 docker compose up -d
 
 # 3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
@@ -59,13 +59,13 @@ docker compose up -d
 ```yaml
 services:
   travel-expense:
-    image: ghcr.io/hanyuestar/travel-expense:v1.0.1
+    image: ghcr.io/hanyuestar/travel-expense:v1.0.2
     container_name: travel-expense
     restart: unless-stopped
     ports:
       - "8108:3000"   # 想换端口只改左侧
     volumes:
-      - /volume1/docker/travel:/data   # 数据持久化（app.db），务必改成你的目录
+      - /volume1/docker/travel:/data   # 数据持久化（app.db + 种子 routes.json + logs/）
     environment:
       - PORT=3000
       - DATA_DIR=/data
@@ -74,6 +74,16 @@ services:
 > 首次启动会自动写入示例路线数据；数据只存在你的磁盘上（`/volume1/docker/travel/app.db`）。
 > 如需 HTTPS 域名访问，反代示例：`https://your-domain.example.com -> 127.0.0.1:8108`。
 
+> **📋 容器日志查看**（两种方式互不冲突）：
+>
+> | 用途 | 命令 | 备注 |
+> |---|---|---|
+> | 实时容器 stdout | `docker compose logs -f` | `docker logs` 默认不留历史，重启即清空 |
+> | 持久化历史日志 | `tail -F /volume1/docker/travel/logs/app.log` | 容器每次启动 tee 追加；含 `[entrypoint]` boot/exit 标记行便于定位 |
+> | 看本周日志末尾 500 行 | `tail -n 500 .../logs/app.log` | 排查已退出容器的报错最有用 |
+>
+> 日志文件由容器 entrypoint 自动落盘到 `$DATA_DIR/logs/app.log`（即挂载卷下的 `logs/app.log`），随数据目录一起持久化迁移，无需额外配置。
+
 ### 方式 B：直接 docker run（不装 compose）
 
 ```bash
@@ -81,7 +91,7 @@ docker run -d --name travel-expense \
   -p 8108:3000 \
   -v /your/path/data:/data \
   --restart unless-stopped \
-  ghcr.io/hanyuestar/travel-expense:v1.0.1
+  ghcr.io/hanyuestar/travel-expense:v1.0.2
 ```
 
 ### 方式 C：手动运行（无 Docker，需 Node 18+）
@@ -145,7 +155,7 @@ node tests/run-all.js                     # 一条命令跑全部测试（主回
 3. 镜像推送到：
    - `ghcr.io/hanyuestar/travel-expense`（必推）
    - `kyson666/travel-expense`（Docker Hub，可选）
-4. 也可在仓库 Actions 页面手动 `workflow_dispatch` 触发。
+4. 也可在仓库 Actions 页面手动 `workflow_dispatch` 触发，调试场景可临时把 `push.tag` 改 `branches`/`pull_request` 等自由触发。
 
 工作流文件见 [`.github/workflows/docker-image.yml`](.github/workflows/docker-image.yml)。
 
@@ -193,7 +203,7 @@ travel-expense/
 
 ## ❓ 常见问题
 
-- **页面打不开**：`docker compose ps` 看容器状态；`curl http://localhost:8108/api/public/site` 看后端连通性。
+- **页面打不开 / 容器启动失败**：`docker compose ps` 看容器状态；`docker compose logs` 看实时输出（容器 stdout）；`tail -F /volume1/docker/travel/logs/app.log` 看历史日志（持久化，包含上次崩溃退出前一刻）。
 - **登录提示「禁止用户登录」**：该账号被管理员封禁，请联系管理员解封。
 - **邮箱验证码收不到**：先到「管理后台 → 邮件配置」填好 SMTP 并「发送测试邮件」验证。
 - **数据没更新**：确认 `docker-compose.yml` 里 `/volume1/docker/travel:/data` 挂载正确。

@@ -3,15 +3,20 @@
 #   1. 在宿主机建数据目录（如 /volume1/docker/travel）并 chmod 可写
 #   2. 把本文件放到该目录，执行：docker compose up -d
 #   3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
+#
+# 日志查看（两种方式，二选一）：
+#   A. 实时容器控制台： docker compose logs -f
+#   B. 持久化到挂载卷： tail -F /volume1/docker/travel/logs/app.log
+#      （logs/ 子目录由容器首次启动自动建在 $DATA_DIR 下）
 services:
   travel-expense:
-    image: ghcr.io/hanyuestar/travel-expense:v1.0.1
+    image: ghcr.io/hanyuestar/travel-expense:v1.0.2
     container_name: travel-expense
     restart: unless-stopped
     ports:
       - "8108:3000"   # 主机端口 8108 -> 容器 3000；想换端口只改左侧数字
     volumes:
-      - /volume1/docker/travel:/data   # 数据持久化：app.db 与种子都在这，务必改成你的目录
+      - /volume1/docker/travel:/data   # 数据持久化：app.db、种子 routes.json、日志 logs/ 都在这
     environment:
       - PORT=3000
       - DATA_DIR=/data

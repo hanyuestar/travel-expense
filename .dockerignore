@@ -3,5 +3,8 @@ data/*
 .git/
 .github/
 node_modules/
+**/node_modules/
+tests/
+**/tests/
 *.log
 .DS_Store

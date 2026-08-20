@@ -8,12 +8,14 @@ RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-# 先装依赖（利用 Docker 层缓存）
+# 先装依赖（利用 Docker 层缓存；依赖装到 /app/node_modules，server 内文件 require 向上冒泡即可命中）
 COPY server/package.json server/package-lock.json ./
 RUN npm install --omit=dev
 
-# 后端代码 + 前端静态资源（app.js 通过 __dirname/../public 托管，须与 server/ 同层）
-COPY server/ ./
+# 后端代码 + 前端静态资源（COPY server/ ./server/ 保留子目录，使 entrypoint `node server/app.js` 与
+#   app.js 内 `require('./db')` 同基于 /app/server/__dirname；前端 COPY 到 /app/public/，
+#   与 app.js 内 PUBLIC_DIR = path.join(__dirname, '..', 'public') = /app/public 完全一致）
+COPY server/ ./server/
 COPY public/ ./public/
 
 # 默认示例数据：首次启动由 entrypoint 复制到挂载卷（不覆盖已有数据）
