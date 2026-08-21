@@ -120,8 +120,8 @@ export function fmt(n) {
 }
 export function addYen(n) { return '¥' + fmt(n); }
 
-/* 币种符号表（常用），未知币种回退代码本身 */
-const CUR_SYMBOLS = { CNY: '¥', HKD: 'HK$', MOP: 'MOP$', TWD: 'NT$', USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩', THB: '฿', SGD: 'S$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', CHF: 'Fr', MYR: 'RM', IDR: 'Rp', PHP: '₱', VND: '₫', INR: '₹', RUB: '₽' };
+/* 币种符号表（常用），JPY 用 JP¥ 区分 CNY 的 ¥；未知币种回退代码本身 */
+const CUR_SYMBOLS = { CNY: '¥', HKD: 'HK$', MOP: 'MOP$', TWD: 'NT$', USD: '$', EUR: '€', GBP: '£', JPY: 'JP¥', KRW: '₩', THB: '฿', SGD: 'S$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', CHF: 'Fr', MYR: 'RM', IDR: 'Rp', PHP: '₱', VND: '₫', INR: '₹', RUB: '₽' };
 export function curSymbol(c) { return CUR_SYMBOLS[(c || 'CNY').toUpperCase()] || (c || 'CNY'); }
 export function fmtMoney(n, cur) { return curSymbol(cur) + fmt(n); }
 export function parseStart(dr, year) {

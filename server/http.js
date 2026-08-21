@@ -31,7 +31,11 @@ function parseCookies(req) {
   const h = req.headers.cookie || '';
   h.split(';').forEach((p) => {
     const i = p.indexOf('=');
-    if (i > -1) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+    if (i > -1) {
+      const key = p.slice(0, i).trim();
+      const rawVal = p.slice(i + 1).trim();
+      try { out[key] = decodeURIComponent(rawVal); } catch (e) { out[key] = rawVal; }
+    }
   });
   return out;
 }

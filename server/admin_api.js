@@ -63,16 +63,21 @@ async function handle(req, res, url, body) {
     const pageSize = Math.min(100, Math.max(1, parseInt(query.pageSize) || 20));
 
     let where = '1=1', args = [];
-    if (q) { where += ' AND (username LIKE ? OR email LIKE ?)'; const like = `%${q}%`; args.push(like, like); }
+    if (q) {
+      where += ' AND (username LIKE ? ESCAPE \'\\\' OR email LIKE ? ESCAPE \'\\\')';
+      const like = `%${q.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
+      args.push(like, like);
+    }
     if (status) { where += ' AND status = ?'; args.push(status); }
     if (role) { where += ' AND role = ?'; args.push(role); }
+    /* online 过滤在 SQL 层用子查询实现，确保分页 total 与列表一致 */
+    if (online) { where += ' AND id IN (SELECT DISTINCT user_id FROM sessions WHERE last_active_at >= ?)'; args.push(Date.now() - ONLINE_MS); }
 
     const total = db().prepare(`SELECT COUNT(*) AS c FROM users WHERE ${where}`).get(...args).c;
     const rows = db().prepare(
       `SELECT * FROM users WHERE ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)
       .all(...args, pageSize, (page - 1) * pageSize);
-    let list = rows.map(userRow);
-    if (online) list = list.filter(u => u.online);
+    const list = rows.map(userRow);
     return ok(res, { list, total, page, pageSize });
   }
 
@@ -90,6 +95,7 @@ async function handle(req, res, url, body) {
     if (action === 'ban') {
       db().prepare('UPDATE users SET status = ?, updated_at = ? WHERE id = ?').run('banned', Date.now(), targetId);
       db().prepare('DELETE FROM sessions WHERE user_id = ?').run(targetId); // 即时掉线
+      db().prepare('UPDATE routes SET share_token = NULL WHERE owner_id = ?').run(targetId); // 作废旧分享链接
       audit(admin.id, 'ban_user', 'user', String(targetId), `封禁用户 ${target.username || target.email}`, ip);
       return ok(res, true);
     }
@@ -211,19 +217,20 @@ async function handle(req, res, url, body) {
     const page = Math.max(1, parseInt(query.page) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(query.pageSize) || 20));
     let where = '1=1', args = [];
-    if (query.action) { where += ' AND action = ?'; args.push(query.action); }
-    if (query.from) { where += ' AND created_at >= ?'; args.push(parseInt(query.from)); }
-    if (query.to) { where += ' AND created_at <= ?'; args.push(parseInt(query.to)); }
-    const total = db().prepare(`SELECT COUNT(*) AS c FROM audit_logs WHERE ${where}`).get(...args).c;
-    const rows = db().prepare(`SELECT * FROM audit_logs WHERE ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)
+    if (query.action) { where += ' AND a.action = ?'; args.push(query.action); }
+    if (query.from) { where += ' AND a.created_at >= ?'; args.push(parseInt(query.from)); }
+    if (query.to) { where += ' AND a.created_at <= ?'; args.push(parseInt(query.to)); }
+    const total = db().prepare(`SELECT COUNT(*) AS c FROM audit_logs a WHERE ${where}`).get(...args).c;
+    /* JOIN users 获取操作人名称，避免全量加载用户到内存 */
+    const rows = db().prepare(
+      `SELECT a.*, COALESCE(u.username, u.email, '系统') AS actor_name
+       FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_id
+       WHERE ${where} ORDER BY a.id DESC LIMIT ? OFFSET ?`)
       .all(...args, pageSize, (page - 1) * pageSize);
-    const actors = db().prepare('SELECT id, username, email FROM users').all();
-    const nameMap = {};
-    actors.forEach(a => (nameMap[a.id] = a.username || a.email));
     const list = rows.map(r => ({
       id: r.id, action: r.action, target_type: r.target_type, target_id: r.target_id,
       detail: r.detail, ip: r.ip, created_at: r.created_at,
-      actor: r.actor_id != null ? (nameMap[r.actor_id] || ('#' + r.actor_id)) : '系统'
+      actor: r.actor_id != null ? r.actor_name : '系统'
     }));
     return ok(res, { list, total, page, pageSize });
   }

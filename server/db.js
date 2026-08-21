@@ -98,6 +98,7 @@ function initDb() {
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  db.pragma('busy_timeout = 5000');
   db.exec(SCHEMA);
   /* 幂等迁移：为已存在的库补加新列（CREATE TABLE IF NOT EXISTS 不会改旧表） */
   addColumn('routes', 'start_date', 'TEXT');
@@ -150,19 +151,26 @@ function seedRoutes() {
   const now = Date.now();
   const ins = db.prepare(`INSERT INTO routes (
       id, owner_id, is_seed, year, name, daterange, type, days, people, dest, scenic, hotel,
+      start_date, end_date, currency, budget_total, budget_daily,
       exp_traffic, exp_flight, exp_train, exp_hotel, exp_meal, exp_ticket, exp_group, exp_shopping, exp_other,
       notes, created_at, updated_at)
     VALUES (@id, @owner_id, 1, @year, @name, @daterange, @type, @days, @people, @dest, @scenic, @hotel,
+      @start_date, @end_date, @currency, @budget_total, @budget_daily,
       @exp_traffic, @exp_flight, @exp_train, @exp_hotel, @exp_meal, @exp_ticket, @exp_group, @exp_shopping, @exp_other,
       @notes, @created_at, @updated_at)`);
   const tx = db.transaction(() => {
     for (const r of arr) {
       const e = r.exp || {};
+      const dr = parseDateRange(r.daterange, r.year);
       ins.run({
         id: r.id || uid('r'), owner_id: admin.id,
         year: r.year || '', name: r.name || '', daterange: r.daterange || '', type: r.type || '自由行',
         days: parseInt(r.days) || 0, people: parseInt(r.people) || 0,
         dest: r.dest || '', scenic: r.scenic || '', hotel: r.hotel || '',
+        start_date: r.start_date || dr.start || '',
+        end_date: r.end_date || dr.end || '',
+        currency: (r.currency && String(r.currency).trim()) || 'CNY',
+        budget_total: num(r.budget_total), budget_daily: num(r.budget_daily),
         exp_traffic: num(e['交通']), exp_flight: num(e['机票']), exp_train: num(e['高铁']),
         exp_hotel: num(e['住宿']), exp_meal: num(e['餐饮']), exp_ticket: num(e['门票']),
         exp_group: num(e['团费']), exp_shopping: num(e['购物']), exp_other: num(e['其他']),
@@ -180,7 +188,11 @@ function parseDateRange(dr, year) {
   let m = dr.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})\s*[-—~]\s*(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
   if (m) return { start: isoDate(m[1], m[2], m[3]), end: isoDate(m[4], m[5], m[6]) };
   m = dr.match(/(\d{1,2})[\/\-.](\d{1,2})\s*[-—~]\s*(\d{1,2})[\/\-.](\d{1,2})/);
-  if (m && year) return { start: isoDate(year, m[1], m[2]), end: isoDate(year, m[3], m[4]) };
+  if (m && year) {
+    const sm = +m[1], em = +m[3];
+    const ey = em < sm ? +year + 1 : +year;
+    return { start: isoDate(year, m[1], m[2]), end: isoDate(ey, m[3], m[4]) };
+  }
   m = dr.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
   if (m) return { start: isoDate(m[1], m[2], m[3]), end: isoDate(m[1], m[2], m[3]) };
   m = dr.match(/(\d{1,2})[\/\-.](\d{1,2})/);

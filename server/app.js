@@ -1,6 +1,6 @@
-/* 多用户版后端入口：http server + 路由分发 + 静态托管
+/* 多用户版后端入口：http server + 路由分发 + 静态托管（前端由后端内置托管，单容器）
  * 启动：node app.js（默认 3000，DATA_DIR 默认 ../data）
- * 前端由 nginx 托管，本服务只响应 /api/* 与健康检查 */
+ * 端口 3000 直出前端静态资源 + /api/* + /health + /share/:token */
 'use strict';
 const http = require('http');
 const fs = require('fs');
@@ -21,40 +21,86 @@ try {
   process.exit(1);
 }
 
-/* 同源校验：写操作需 Origin/Referer 与 Host 同域；无来源头放行（curl/服务端调用） */
+/* ---------- 实时汇率：启动时刷新 + 定时刷新（仅配置 FX_API_URL 时启用） ---------- */
+async function refreshFx() {
+  if (!config.FX_API_URL) return;
+  try {
+    const ok = await fx.refreshFromApi(config.FX_API_URL, 4000);
+    if (ok) console.log('[fx] 实时汇率已刷新');
+  } catch (e) { console.error('[fx] 汇率刷新失败，使用静态兜底:', e.message); }
+}
+refreshFx();
+const fxTimer = setInterval(refreshFx, config.FX_REFRESH_INTERVAL_MS);
+fxTimer.unref(); // 不阻止进程退出
+
+/* ---------- 安全响应头（所有响应统一设置） ---------- */
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  /* CSP：script 仅同源（ES Modules 无内联脚本）；style 允许内联（大量 style 属性）；
+     frame-ancestors 'none' 等价 X-Frame-Options DENY；connect 仅同源 API */
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
+};
+if (config.COOKIE_SECURE) {
+  SECURITY_HEADERS['Strict-Transport-Security'] = `max-age=${config.HSTS_MAX_AGE}; includeSubDomains`;
+}
+function applySecurityHeaders(res) {
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
+}
+
+/* ---------- 访问日志 ---------- */
+function accessLog(req, res, startMs, statusCode) {
+  if (!config.ACCESS_LOG) return;
+  const dur = Date.now() - startMs;
+  const ip = req.socket.remoteAddress || '-';
+  console.log(`${ip} - ${req.method} ${req.url} -> ${statusCode} (${dur}ms)`);
+}
+
+/* 同源校验：写操作需 Origin/Referer 与 Host 同域；无来源头放行（curl/服务端调用）
+ * 若配置 TRUSTED_HOSTS，则额外校验 Host 必须在可信列表中（防 Host 头伪造） */
 function sameOrigin(req) {
   const m = req.method;
   if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return true;
-  const host = req.headers.host;
+  const host = (req.headers.host || '').toLowerCase();
   if (!host) return true;
+  /* 可信主机校验：配置后 Host 必须匹配可信域名（含端口） */
+  if (config.TRUSTED_HOSTS.length > 0 && !config.TRUSTED_HOSTS.includes(host)) {
+    return false;
+  }
   const origin = req.headers.origin;
   const referer = req.headers.referer;
   if (!origin && !referer) return true;
-  const sameHost = (u) => { try { return new URL(u).host === host; } catch { return false; } };
+  const sameHost = (u) => { try { return new URL(u).host.toLowerCase() === host; } catch { return false; } };
   if (origin) return sameHost(origin);
   return sameHost(referer);
 }
 
 const server = http.createServer(async (req, res) => {
+  const startMs = Date.now();
+  applySecurityHeaders(res);
   const url = parseUrl(req.url || '/');
 
-  /* CORS/安全头 */
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-
-  /* 健康检查 */
+  /* 健康检查（含 DB 连通性校验） */
   if (url.pathname === '/health') {
-    return send(res, 200, { ok: true, ts: Date.now() });
+    let dbOk = false;
+    try { db.prepare('SELECT 1').get(); dbOk = true; } catch (e) { /* db 不可用 */ }
+    const status = dbOk ? 200 : 503;
+    accessLog(req, res, startMs, status);
+    return send(res, status, { ok: dbOk, ts: Date.now(), db: dbOk ? 'ok' : 'error' });
   }
 
   /* CSRF 同源加固：写操作（非 GET/HEAD/OPTIONS）要求 Origin/Referer 与 Host 同域
    * 无来源头（curl / 服务端调用 / 同源老客户端）放行，避免阻断合法请求与测试 */
   if (!sameOrigin(req)) {
+    accessLog(req, res, startMs, 403);
     return fail(res, 403, '跨站请求被拒绝', { code: 'BAD_ORIGIN' });
   }
 
   /* 公开站点信息（无需登录） */
   if (url.pathname === '/api/public/site') {
     const s = db.prepare('SELECT * FROM site_settings WHERE id = 1').get() || {};
+    accessLog(req, res, startMs, 200);
     return send(res, 200, {
       ok: true,
       data: {
@@ -72,8 +118,9 @@ const server = http.createServer(async (req, res) => {
   const shareM = url.pathname.match(/^\/share\/([A-Za-z0-9]+)$/);
   if (shareM) {
     const r = dbModule.findRouteByShareToken(shareM[1]);
-    if (!r) return send(res, 404, { ok: false, msg: '分享不存在或已失效' });
+    if (!r) { accessLog(req, res, startMs, 404); return send(res, 404, { ok: false, msg: '分享不存在或已失效' }); }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    accessLog(req, res, startMs, 200);
     return res.end(renderSharePage(r));
   }
 
@@ -83,6 +130,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (e) {
+      accessLog(req, res, startMs, 400);
       return fail(res, 400, '请求体解析失败');
     }
     try {
@@ -95,18 +143,20 @@ const server = http.createServer(async (req, res) => {
       if (url.pathname.startsWith('/api/admin')) {
         return await adminApi.handle(req, res, url, body);
       }
+      accessLog(req, res, startMs, 404);
       return fail(res, 404, '接口不存在');
     } catch (e) {
       console.error('[api error]', url.pathname, e);
+      accessLog(req, res, startMs, 500);
       return fail(res, 500, '服务器内部错误');
     }
   }
 
-  /* 静态资源：仅当同时托管前端时启用（开发模式）；容器内由 nginx 承担 */
+  /* 静态资源：由后端内置托管（单容器部署，无需 nginx） */
   const PUBLIC_DIR = path.join(__dirname, '..', 'public');
   if (fs.existsSync(PUBLIC_DIR)) {
     let f = path.normalize(path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : url.pathname));
-    if (!f.startsWith(PUBLIC_DIR)) return send(res, 403, { ok: false, msg: 'forbidden' });
+    if (!f.startsWith(PUBLIC_DIR)) { accessLog(req, res, startMs, 403); return send(res, 403, { ok: false, msg: 'forbidden' }); }
     if (fs.existsSync(f) && fs.statSync(f).isFile()) {
       const ext = path.extname(f).toLowerCase();
       const MIME = {
@@ -114,12 +164,17 @@ const server = http.createServer(async (req, res) => {
         '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
         '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon'
       };
+      /* 缓存策略：index.html 不缓存（确保更新即时生效）；JS/CSS 等静态资源缓存 5 分钟 */
+      const cacheControl = ext === '.html' ? 'no-cache' : 'public, max-age=300';
       const data = fs.readFileSync(f);
-      res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+      res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': cacheControl });
+      accessLog(req, res, startMs, 200);
       return res.end(data);
     }
+    accessLog(req, res, startMs, 404);
     return send(res, 404, { ok: false, msg: 'not found' });
   }
+  accessLog(req, res, startMs, 404);
   return send(res, 404, { ok: false, msg: 'not found' });
 });
 
@@ -127,16 +182,37 @@ server.listen(config.PORT, () => {
   console.log(`[travel-expense] 多用户后端启动 :${config.PORT}，DB=${path.join(config.DATA_DIR, config.DB_FILE)}`);
 });
 
+/* ---------- 优雅关闭：SIGTERM/SIGINT → 停止接受新连接 → 关闭 DB → 退出 ---------- */
+let shuttingDown = false;
+function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] 收到 ${signal}，开始优雅关闭...`);
+  server.close(() => {
+    try { db.close(); } catch (e) { /* ignore */ }
+    console.log('[shutdown] 服务已关闭');
+    process.exit(0);
+  });
+  /* 兜底：10 秒后强制退出 */
+  setTimeout(() => { console.error('[shutdown] 优雅关闭超时，强制退出'); process.exit(1); }, 10000).unref();
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 /* ---------- 只读分享页渲染 ---------- */
 function esc(s) {
   return (s === null || s === undefined ? '' : String(s)).replace(/[&<>"']/g,
     c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+/* JPY 用 JP¥ 区分 CNY 的 ¥；日元无小数 */
+const JPY_ZERO_DECIMAL = new Set(['JPY', 'KRW']);
 function money(n, cur) {
-  const SYM = { CNY: '¥', HKD: 'HK$', MOP: 'MOP$', TWD: 'NT$', USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩', THB: '฿', SGD: 'S$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', CHF: 'Fr', MYR: 'RM' };
-  const s = SYM[(cur || 'CNY').toUpperCase()] || (cur || 'CNY');
+  const SYM = { CNY: '¥', HKD: 'HK$', MOP: 'MOP$', TWD: 'NT$', USD: '$', EUR: '€', GBP: '£', JPY: 'JP¥', KRW: '₩', THB: '฿', SGD: 'S$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', CHF: 'Fr', MYR: 'RM' };
+  const curUp = (cur || 'CNY').toUpperCase();
+  const s = SYM[curUp] || (cur || 'CNY');
   const v = parseFloat(n);
-  const num = isFinite(v) ? v.toLocaleString('zh-CN', { maximumFractionDigits: 2 }) : '0';
+  const fracDigits = JPY_ZERO_DECIMAL.has(curUp) ? 0 : 2;
+  const num = isFinite(v) ? v.toLocaleString('zh-CN', { maximumFractionDigits: fracDigits, minimumFractionDigits: 0 }) : '0';
   return s + num;
 }
 function renderSharePage(r) {

@@ -23,6 +23,11 @@ const ROUTE_COLS = dbModule.ROUTE_COLS;
 const CSV_HEAD = ['name', 'year', 'type', 'daterange', 'start_date', 'end_date', 'days', 'people', 'dest',
   'currency', 'budget_total', 'budget_daily'].concat(dbModule.EXP_KEYS, ['scenic', 'hotel', 'notes']);
 
+/* 转义 LIKE 通配符 % 和 _，防止用户输入被当作通配符 */
+function escapeLike(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
 /* 查询本人+种子（含个人隐藏开关过滤种子）；返回全量行（统计用） */
 function queryRoutes(userId, { year, q, hideSeed }) {
   const args = [userId];
@@ -31,8 +36,8 @@ function queryRoutes(userId, { year, q, hideSeed }) {
   where += `)`;
   if (year) { where += ` AND year = ?`; args.push(String(year)); }
   if (q) {
-    where += ` AND (name LIKE ? OR dest LIKE ? OR scenic LIKE ?)`;
-    const like = `%${q}%`; args.push(like, like, like);
+    where += ` AND (name LIKE ? ESCAPE '\\' OR dest LIKE ? ESCAPE '\\' OR scenic LIKE ? ESCAPE '\\')`;
+    const like = `%${escapeLike(q)}%`; args.push(like, like, like);
   }
   return db().prepare(`SELECT ${ROUTE_COLS} FROM routes WHERE ${where} ORDER BY year DESC, created_at DESC`).all(...args);
 }
@@ -111,17 +116,29 @@ async function handle(req, res, url, body) {
     return res.end(toCsv(head, data));
   }
 
-  /* POST /api/routes/import — 个人 JSON 导入（新增为本人路线，仅白名单字段） */
+  /* POST /api/routes/import — 个人 JSON 导入（新增为本人路线，仅白名单字段，按名称+年份+目的地去重） */
   if (rest === '/import' && method === 'POST') {
     if (!body || !Array.isArray(body.routes)) return fail(res, 400, '格式应为 { routes: [...] }');
     if (body.routes.length > 2000) return fail(res, 400, '单次导入上限 2000 条');
-    let created = 0, skipped = 0;
+    let created = 0, skipped = 0, duplicates = 0;
     const errors = [];
+    /* 构建已存在的 key 集合用于去重（name|year|dest） */
+    const existing = new Set(
+      db().prepare('SELECT name, year, dest FROM routes WHERE owner_id = ?').all(user.id)
+        .map(r => `${r.name || ''}|${r.year || ''}|${r.dest || ''}`)
+    );
+    const seenInBatch = new Set();
     body.routes.forEach((item, i) => {
       if (!item || typeof item !== 'object' || !String(item.name || '').trim()) {
         skipped++; errors.push('第 ' + (i + 1) + ' 条缺少名称，已跳过');
         return;
       }
+      const key = `${String(item.name).trim()}|${String(item.year || '').trim()}|${String(item.dest || '').trim()}`;
+      if (existing.has(key) || seenInBatch.has(key)) {
+        duplicates++;
+        return;
+      }
+      seenInBatch.add(key);
       const clean = {
         name: String(item.name), year: String(item.year || ''), type: String(item.type || '自由行'),
         daterange: String(item.daterange || ''), start_date: String(item.start_date || ''), end_date: String(item.end_date || ''),
@@ -132,9 +149,10 @@ async function handle(req, res, url, body) {
         notes: String(item.notes || '')
       };
       dbModule.insertRoute(user.id, clean, false);
+      existing.add(key);
       created++;
     });
-    return ok(res, { created, skipped, errors });
+    return ok(res, { created, skipped, duplicates, errors });
   }
 
   /* /:id 详情/更新/删除 + /:id/share 只读分享 */

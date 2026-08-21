@@ -89,12 +89,14 @@ async function main() {
     check('导出对象含完整 exp 与预算', exported.exp.机票 === 300 && exported.budget_total === 1000 && exported.currency === 'USD', exported);
 
     r = await req('POST', '/api/routes/import', { routes: [{ exp: {} }, exported, { id: 'hack123', owner_id: 999, name: '带系统字段的路线', exp: { 其他: 5 } }] }, userCookie);
-    check('导入 200 返回计数', r.status === 200 && r.json.data.created === 2 && r.json.data.skipped === 1, r.json.data);
+    /* 去重：exported 与已存在路线同名同年同目的地 → 跳过；非法行 → 跳过；新路线 → 新增 */
+    check('导入 200 返回计数', r.status === 200 && r.json.data.created === 1 && r.json.data.skipped === 1 && r.json.data.duplicates === 1, r.json.data);
     check('非法行被跳过并说明', r.json.data.errors.length === 1 && /缺少名称/.test(r.json.data.errors[0]), r.json.data.errors);
 
     r = await req('GET', '/api/routes', null, userCookie);
     const mine = r.json.data.list.filter(x => !x.is_seed);
-    check('导入后本人路线 = 1 + 2 = 3', mine.length === 3, mine.length);
+    /* 去重后：1 原始 + 1 新导入 = 2（重复的 exported 未新增） */
+    check('导入后本人路线 = 1 + 1 = 2（去重生效）', mine.length === 2, mine.length);
     const imported = mine.find(x => x.name === '含逗号,引号"路线');
     check('往返导入字段完整（USD/预算/日期/exp）',
       imported && imported.currency === 'USD' && imported.budget_total === 1000

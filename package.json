@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-workbench",
-  "version": "2.0.0",
-  "description": "旅行路线 · 经费台 — 多用户自托管工作台（前后端分离，数据存于挂载卷 app.db）",
+  "version": "1.0.2",
+  "description": "旅行路线 · 经费台 — 多用户自托管工作台（全栈单镜像，数据存于挂载卷 app.db）",
   "scripts": {
     "start": "node server/app.js"
   },

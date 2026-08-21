@@ -3,22 +3,28 @@ import { store, toast, api, navigate, esc, fmt, fmtMoney, toHome, parseStart, fm
 import { CATS, COLORS, totalOf, donut, trendBar } from './charts.js';
 
 let routes = [];
-let state = { filterYear: 'all', search: '', curId: null, detailId: null };
+let state = { filterYear: 'all', search: '', curId: null, detailId: null, page: 1, total: 0, pageSize: 50 };
 
-export function refreshRoutes() {
+export function refreshRoutes(page) {
   const qs = new URLSearchParams();
   if (store.hideSeed) qs.set('hideSeed', '1');
+  if (state.filterYear && state.filterYear !== 'all') qs.set('year', state.filterYear);
+  qs.set('page', String(page || state.page || 1));
+  qs.set('pageSize', String(state.pageSize || 50));
   return api.get('/routes' + (qs.toString() ? '?' + qs.toString() : ''));
 }
 
 export async function loadRoutes() {
   try {
-    const data = await refreshRoutes();
+    const data = await refreshRoutes(state.page);
     routes = data.list || [];
+    state.total = data.total || 0;
+    state.pageSize = data.pageSize || state.pageSize;
   } catch (e) {
     if (e.status === 401) { navigate('/login'); return; }
     toast(e.message);
     routes = [];
+    state.total = 0;
   }
 }
 
@@ -53,6 +59,7 @@ export function renderWorkbench() {
       <button class="btn btn-primary" id="newRouteBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>新增路线</button>
     </div>
     <div class="grid" id="routeGrid"></div>
+    <div class="pager" id="routePager" style="display:none;margin:12px 0 4px"></div>
     <div style="height:16px"></div>
     <div class="stat-cards" id="statCards"></div>
     <div class="flex2">
@@ -71,11 +78,12 @@ export function renderWorkbench() {
       <div id="yearTable"></div>
     </div>`;
 
-  document.getElementById('search').oninput = e => { state.search = e.target.value; renderRoutes(); };
+  document.getElementById('search').oninput = e => { state.search = e.target.value; renderRoutes(); renderStats(); };
   document.getElementById('hideSeedCb').onchange = e => {
     store.hideSeed = e.target.checked;
     localStorage.setItem('te_hide_seed', store.hideSeed ? '1' : '0');
-    loadRoutes().then(renderRoutes);
+    state.page = 1;
+    loadRoutes().then(() => { renderRoutes(); renderPager(); });
   };
   document.getElementById('newRouteBtn').onclick = () => openForm(null);
   document.getElementById('exportBtn').onclick = exportCsv;
@@ -88,13 +96,15 @@ export function renderWorkbench() {
   document.querySelectorAll('[data-fy]').forEach(c => {
     c.onclick = () => {
       state.filterYear = c.dataset.fy;
+      state.page = 1;
       /* 同步 chip 高亮：renderRoutes 只重绘路线网格，不重渲染 chip 行 */
       document.querySelectorAll('[data-fy]').forEach(x => x.classList.toggle('active', x === c));
-      renderRoutes();
+      loadRoutes().then(() => { renderRoutes(); renderPager(); renderStats(); });
     };
   });
   document.getElementById('routeGrid').onclick = onGridClick;
   renderRoutes();
+  renderPager();
   void curYear;
 }
 
@@ -160,6 +170,28 @@ function perOf(r) {
   return p > 0 ? Math.round(t / p) : null;
 }
 
+/* 分页控件：与管理端分页风格一致，仅当总数超过单页时显示 */
+function renderPager() {
+  const el = document.getElementById('routePager');
+  if (!el) return;
+  const total = state.total || 0;
+  const ps = state.pageSize || 50;
+  const totalPages = Math.max(1, Math.ceil(total / ps));
+  if (total <= ps) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.style.gap = '10px';
+  el.style.alignItems = 'center';
+  el.style.justifyContent = 'center';
+  el.innerHTML = `
+    <button class="btn btn-sm" ${state.page <= 1 ? 'disabled' : ''} id="rpPrev">上一页</button>
+    <span style="color:var(--muted);font-size:13px">${state.page} / ${totalPages}（共 ${total} 条）</span>
+    <button class="btn btn-sm" ${state.page >= totalPages ? 'disabled' : ''} id="rpNext">下一页</button>`;
+  const prev = document.getElementById('rpPrev');
+  const next = document.getElementById('rpNext');
+  if (prev) prev.onclick = () => { if (state.page > 1) { state.page--; loadRoutes().then(() => { renderRoutes(); renderPager(); renderStats(); }); window.scrollTo({ top: 0, behavior: 'smooth' }); } };
+  if (next) next.onclick = () => { if (state.page < totalPages) { state.page++; loadRoutes().then(() => { renderRoutes(); renderPager(); renderStats(); }); window.scrollTo({ top: 0, behavior: 'smooth' }); } };
+}
+
 function budgetBar(r) {
   const b = parseFloat(r.budget_total) || 0;
   if (b <= 0) return '';
@@ -204,8 +236,9 @@ async function importJson(file) {
     if (!Array.isArray(list) || !list.length) throw new Error('文件中没有可导入的路线');
     const res = await api.post('/routes/import', { routes: list });
     if (res && res.created) {
-      toast('导入完成：新增 ' + res.created + ' 条' + (res.skipped ? '，跳过 ' + res.skipped + ' 条' : ''));
-      await loadRoutes(); renderRoutes();
+      const dup = res.duplicates ? '，去重跳过 ' + res.duplicates + ' 条' : '';
+      toast('导入完成：新增 ' + res.created + ' 条' + (res.skipped ? '，跳过 ' + res.skipped + ' 条' : '') + dup);
+      await loadRoutes(); renderRoutes(); renderPager(); renderStats();
     } else throw new Error((res && res.msg) || '导入失败');
   } catch (e) { toast('导入失败：' + e.message); }
 }
@@ -242,19 +275,20 @@ export function renderStats() {
         <span>${d.label}</span><span class="lp">${pct}%</span><span class="lv">${homeMoney(d.value)}</span></div>`;
     }).join('') || '<div class="empty">暂无花费数据</div>';
   }
-  const ys = years();
+  /* 年度列表从 scope 派生，确保统计卡、趋势图、年度表口径一致 */
+  const ys = [...new Set(scope.map(r => r.year))].filter(Boolean).sort((a, b) => b.localeCompare(a));
   const trendEl = document.getElementById('trendChart');
   if (trendEl) {
     const points = ys.map(y => ({
       label: y,
-      value: routes.filter(r => r.year === y).reduce((s, r) => s + toHome(totalOf(r), r.currency), 0)
+      value: scope.filter(r => r.year === y).reduce((s, r) => s + toHome(totalOf(r), r.currency), 0)
     }));
     trendEl.innerHTML = trendBar(points, null, store.site.home_currency);
   }
   const table = document.getElementById('yearTable');
   if (table) {
     table.innerHTML = ys.map(y => {
-      const rs = routes.filter(r => r.year === y);
+      const rs = scope.filter(r => r.year === y);
       const tot = rs.reduce((s, r) => s + toHome(totalOf(r), r.currency), 0);
       const dy = rs.reduce((s, r) => s + (parseInt(r.days) || 0), 0);
       return `<div class="detail-row"><span class="k">${y} 年（${rs.length} 次 / ${dy} 天）</span><span class="v">${homeMoney(tot)}</span></div>`;
@@ -325,6 +359,7 @@ async function saveForm() {
     closeMask('formMask');
     await loadRoutes();
     renderRoutes();
+    renderPager();
     renderStats();
   } catch (e) { toast(e.message); }
 }
@@ -337,6 +372,7 @@ async function deleteRoute(id) {
     closeMask('formMask');
     await loadRoutes();
     renderRoutes();
+    renderPager();
     renderStats();
   } catch (e) { toast(e.message); }
 }

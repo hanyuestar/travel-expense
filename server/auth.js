@@ -37,7 +37,17 @@ function publicUser(u) {
 
 /* 简单内存限流：key -> {count, resetAt}（进程内即可，重启清零） */
 const rateBuckets = new Map();
+let lastRateCleanup = 0;
+function cleanupRateBuckets() {
+  const now = Date.now();
+  if (now - lastRateCleanup < 5 * 60 * 1000) return; // 每 5 分钟最多清理一次
+  lastRateCleanup = now;
+  for (const [key, b] of rateBuckets) {
+    if (b.resetAt <= now) rateBuckets.delete(key);
+  }
+}
 function rateLimit(key, limit, windowMs) {
+  cleanupRateBuckets();
   const now = Date.now();
   let b = rateBuckets.get(key);
   if (!b || b.resetAt <= now) { b = { count: 0, resetAt: now + windowMs }; rateBuckets.set(key, b); }
@@ -68,12 +78,18 @@ function clearCookie(res) {
   res.setHeader('Set-Cookie', 'sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
 }
 
-/* 读取会话并返回用户；失败返回 null（不抛错） */
+/* 读取会话并返回用户；失败返回 null（不抛错）
+ * 服务端 TTL 校验：超过 SESSION_TTL_MS 无活动则会话失效并删除 */
 function authFromReq(req) {
   const sid = parseCookies(req).sid;
   if (!sid) return null;
   const s = db().prepare('SELECT * FROM sessions WHERE id = ?').get(sid);
   if (!s) return null;
+  /* 服务端会话过期校验（滑动窗口：距最后活动超过 TTL 则失效） */
+  if (Date.now() - s.last_active_at > config.SESSION_TTL_MS) {
+    deleteSession(sid);
+    return null;
+  }
   const u = db().prepare('SELECT * FROM users WHERE id = ?').get(s.user_id);
   if (!u || u.status !== 'active') return null;
   touchSession(sid);
@@ -85,7 +101,10 @@ function authFromReq(req) {
 /* ---------- 校验码 ---------- */
 function issueCode(email, purpose) {
   const now = Date.now();
-  // 清理该邮箱旧码（未消费的作废）
+  // 清理该邮箱该用途的所有过期码（防止表无限增长）
+  db().prepare('DELETE FROM verification_codes WHERE email = ? AND purpose = ? AND expires_at < ?')
+    .run(email, purpose, now);
+  // 作废旧码（未消费的）
   db().prepare('UPDATE verification_codes SET consumed = 1 WHERE email = ? AND purpose = ? AND consumed = 0').run(email, purpose);
   const code = genCode();
   db().prepare('INSERT INTO verification_codes (email, purpose, code, expires_at, consumed, created_at) VALUES (?,?,?,?,0,?)')
@@ -100,6 +119,14 @@ function consumeCode(email, purpose, code) {
   if (row.expires_at < Date.now()) return false;
   db().prepare('UPDATE verification_codes SET consumed = 1 WHERE id = ?').run(row.id);
   return true;
+}
+
+/* ---------- 审计日志（auth 内部用） ---------- */
+function auditAuth(actorId, action, targetType, targetId, detail, ip) {
+  try {
+    db().prepare('INSERT INTO audit_logs (actor_id, action, target_type, target_id, detail, ip, created_at) VALUES (?,?,?,?,?,?,?)')
+      .run(actorId, action, targetType || null, targetId || null, detail || null, ip || null, Date.now());
+  } catch (e) { /* 审计写入失败不阻塞主流程 */ }
 }
 
 /* ---------- 路由 ---------- */
@@ -190,10 +217,19 @@ async function handle(req, res, url, body) {
       const now = Date.now();
       const salt = crypto.randomBytes(16).toString('hex');
       const hash = hashPassword(password, salt);
-      const info = db().prepare(
-        'INSERT INTO users (username, email, password_hash, password_salt, role, status, email_verified, force_reset, created_at, updated_at) VALUES (?,?,?,?,?,?,?,0,?,?)')
-        .run(finalName || null, email || null, hash, salt, 'user', 'active', email ? 1 : 0, now, now);
-      const userId = info.lastInsertRowid;
+      let userId;
+      try {
+        const info = db().prepare(
+          'INSERT INTO users (username, email, password_hash, password_salt, role, status, email_verified, force_reset, created_at, updated_at) VALUES (?,?,?,?,?,?,?,0,?,?)')
+          .run(finalName || null, email || null, hash, salt, 'user', 'active', email ? 1 : 0, now, now);
+        userId = info.lastInsertRowid;
+      } catch (e) {
+        /* UNIQUE 约束竞态：并发注册同邮箱/用户名 → 返回 409 而非 500 */
+        if (e && e.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+          return fail(res, 409, '该邮箱或账户名已被使用', { code: 'TAKEN' });
+        }
+        throw e;
+      }
       const sid = createSession(userId, req.socket.remoteAddress, req.headers['user-agent']);
       setCookie(res, sid, config.SESSION_TTL_MS);
       const u = db().prepare('SELECT * FROM users WHERE id = ?').get(userId);
@@ -208,8 +244,12 @@ async function handle(req, res, url, body) {
       const code = String((body.code || '').trim());
       if (!login) return fail(res, 400, '请输入登录名');
       const ip = req.socket.remoteAddress || '';
+      /* 双重限流：按 IP+用户名（精准防单账户爆破）+ 按 IP（防跨用户名撞库） */
       if (!rateLimit('login:' + ip + ':' + login, config.RATE_LIMIT.login, config.RATE_LIMIT.windowMs)) {
         return fail(res, 429, '尝试次数过多，请 10 分钟后再试');
+      }
+      if (!rateLimit('loginip:' + ip, config.RATE_LIMIT.loginByIp, config.RATE_LIMIT.windowMs)) {
+        return fail(res, 429, '该 IP 尝试过于频繁，请稍后再试');
       }
 
       let user = db().prepare('SELECT * FROM users WHERE username = ?').get(login)
@@ -228,15 +268,18 @@ async function handle(req, res, url, body) {
       const sid = createSession(user.id, ip, req.headers['user-agent']);
       setCookie(res, sid, config.SESSION_TTL_MS);
       if (user.role === 'admin') {
-        db().prepare('INSERT INTO audit_logs (actor_id, action, target_type, target_id, detail, ip, created_at) VALUES (?,?,?,?,?,?,?)')
-          .run(user.id, 'admin_login', 'user', String(user.id), user.username, ip, Date.now());
+        auditAuth(user.id, 'admin_login', 'user', String(user.id), user.username, ip);
       }
       return ok(res, publicUser(user));
     }
 
     /* 登出 */
     case 'logout': {
+      const u = authFromReq(req);
       const sid = parseCookies(req).sid;
+      if (u && u.role === 'admin') {
+        auditAuth(u.id, 'admin_logout', 'user', String(u.id), u.username, req.socket.remoteAddress || '');
+      }
       deleteSession(sid);
       clearCookie(res);
       return ok(res, true);
