@@ -51,6 +51,8 @@ async function init() {
 }
 
 function bindHeaderEvents() {
+  document.getElementById('headerLoginBtn').onclick = () => navigate('/login');
+  document.getElementById('headerRegisterBtn').onclick = () => navigate('/register');
   document.getElementById('logoutBtn').onclick = async () => {
     try { await api.post('/auth/logout'); } catch (e) { /* ignore */ }
     store.user = null;

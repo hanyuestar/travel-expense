@@ -31,12 +31,25 @@ export function toast(msg, ms = 2200) {
 }
 
 async function request(method, path, body) {
-  const opt = { method, credentials: 'same-origin' };
+  const opt = { method, credentials: 'same-origin', mode: 'same-origin' };
   if (body !== undefined) {
     opt.headers = { 'Content-Type': 'application/json' };
     opt.body = JSON.stringify(body);
   }
-  const r = await fetch('/api' + path, opt);
+  let r;
+  try {
+    r = await fetch('/api' + path, opt);
+  } catch (e) {
+    /* 移动网络/证书/代理异常时 fetch 抛 TypeError（消息常为 Failed to fetch），提示不友好 */
+    const isNetwork = !e.status && (e.name === 'TypeError' || /failed to fetch|network|net::err/i.test(e.message));
+    const msg = isNetwork
+      ? '网络连接失败，请检查网络或该站点证书是否受信任'
+      : (e.message || '请求失败');
+    const err = new Error(msg);
+    err.network = isNetwork;
+    err.original = e;
+    throw err;
+  }
   let data = null;
   try { data = await r.json(); } catch (e) { /* empty */ }
   if (!r.ok) {
