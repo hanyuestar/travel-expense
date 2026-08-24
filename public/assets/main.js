@@ -20,6 +20,7 @@ async function guard() {
 async function render() {
   if (!(await guard())) return;
   const route = location.hash || '#/workbench';
+  renderHeader();   // 同步顶部：登录/注册页隐藏 guestArea，其余页显示
 
   if (route.startsWith('#/login')) { renderLogin(); return; }
   if (route.startsWith('#/register')) { renderRegister(); return; }

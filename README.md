@@ -39,6 +39,12 @@
 
 ## 📌 版本变更记录
 
+### v1.0.4（2026-08-24）
+缺陷修复（无功能删减，向后兼容 v1.0.3 数据）：
+- **修复登录页顶部「登录」按钮点了没反应**：此前在登录 / 注册页，顶部 header 仍显示「登录 / 注册」按钮（与页面表单重复）。点击该按钮执行 `navigate('/login')`，但当前 hash 已是 `#/login`，`hashchange` 不触发，故「无任何反应」，用户误以为登录功能损坏。
+- **修复方式**：`renderHeader()` 在未登录且当前路由为 `#/login` / `#/register` 时隐藏顶部 `guestArea`；`render()` 在路由切换时同步调用 `renderHeader()`。登录页顶部仅保留站点 Logo（可点返回），登录入口统一收敛到页面表单。
+- 验证：无头浏览器 E2E 确认登录页顶部 `guestArea` 已隐藏、下方「登 录」按钮可正常登录并跳转；全量回归 6 脚本 181 用例通过。
+
 ### v1.0.3（2026-08-24）
 缺陷修复（无功能删减，向后兼容 v1.0.2 数据）：
 - **修复顶部「登录 / 注册」按钮无响应**：根因为上版新增的 CSP 安全头 `script-src 'self'` 拦截了首页内联 `onclick`，已将按钮改为 `id` 并在 JS 中绑定跳转事件。登录框内的按钮本就由 JS 绑定，故不受影响。
@@ -59,7 +65,7 @@ mkdir -p /volume1/docker/travel
 cd /volume1/docker/travel
 curl -O https://raw.githubusercontent.com/hanyuestar/travel-expense/main/docker-compose.yml
 
-# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.3）
+# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.4）
 docker compose up -d
 
 # 3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
@@ -70,7 +76,7 @@ docker compose up -d
 ```yaml
 services:
   travel-expense:
-    image: ghcr.io/hanyuestar/travel-expense:v1.0.3
+    image: ghcr.io/hanyuestar/travel-expense:v1.0.4
     container_name: travel-expense
     restart: unless-stopped
     ports:
@@ -102,7 +108,7 @@ docker run -d --name travel-expense \
   -p 8108:3000 \
   -v /your/path/data:/data \
   --restart unless-stopped \
-  ghcr.io/hanyuestar/travel-expense:v1.0.3
+  ghcr.io/hanyuestar/travel-expense:v1.0.4
 ```
 
 ### 方式 C：手动运行（无 Docker，需 Node 18+）
@@ -180,7 +186,7 @@ node tests/run-all.js                     # 一条命令跑全部测试（主回
 1. ghcr 发布无需配置（自动注入 `GITHUB_TOKEN`）；Docker Hub 需配置 Secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（未配置则自动跳过 Docker Hub，不影响 ghcr）。
 2. 打版本 tag 并推送即触发构建（linux/amd64 + arm64 双架构）：
    ```bash
-   git tag -a v1.0.3 -m "v1.0.3 single-image"
+   git tag -a v1.0.4 -m "v1.0.4 single-image"
    git push origin main --tags
    ```
 3. 镜像推送到：
