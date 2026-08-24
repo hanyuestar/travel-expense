@@ -37,6 +37,16 @@
 
 ---
 
+## 📌 版本变更记录
+
+### v1.0.3（2026-08-24）
+缺陷修复（无功能删减，向后兼容 v1.0.2 数据）：
+- **修复顶部「登录 / 注册」按钮无响应**：根因为上版新增的 CSP 安全头 `script-src 'self'` 拦截了首页内联 `onclick`，已将按钮改为 `id` 并在 JS 中绑定跳转事件。登录框内的按钮本就由 JS 绑定，故不受影响。
+- **优化移动端注册网络错误提示**：部分手机浏览器注册时仅显示「Failed to fetch」（这是 `fetch` 网络层抛出的 `TypeError`，非业务错误，常因移动网络 / 代理不稳定或站点证书不被该浏览器信任）。现已捕获该错误并提示「网络连接失败，请检查网络或该站点证书是否受信任」，同时设置 `fetch` 的 `mode: 'same-origin'` 提升兼容性。
+- 测试：6 脚本 / 181 用例全部通过。
+
+---
+
 ## 🚀 部署方法
 
 ### 方式 A：Docker Compose 自托管（单容器，推荐）
@@ -49,7 +59,7 @@ mkdir -p /volume1/docker/travel
 cd /volume1/docker/travel
 curl -O https://raw.githubusercontent.com/hanyuestar/travel-expense/main/docker-compose.yml
 
-# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.2）
+# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.3）
 docker compose up -d
 
 # 3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
@@ -60,7 +70,7 @@ docker compose up -d
 ```yaml
 services:
   travel-expense:
-    image: ghcr.io/hanyuestar/travel-expense:v1.0.2
+    image: ghcr.io/hanyuestar/travel-expense:v1.0.3
     container_name: travel-expense
     restart: unless-stopped
     ports:
@@ -92,7 +102,7 @@ docker run -d --name travel-expense \
   -p 8108:3000 \
   -v /your/path/data:/data \
   --restart unless-stopped \
-  ghcr.io/hanyuestar/travel-expense:v1.0.2
+  ghcr.io/hanyuestar/travel-expense:v1.0.3
 ```
 
 ### 方式 C：手动运行（无 Docker，需 Node 18+）
@@ -170,7 +180,7 @@ node tests/run-all.js                     # 一条命令跑全部测试（主回
 1. ghcr 发布无需配置（自动注入 `GITHUB_TOKEN`）；Docker Hub 需配置 Secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（未配置则自动跳过 Docker Hub，不影响 ghcr）。
 2. 打版本 tag 并推送即触发构建（linux/amd64 + arm64 双架构）：
    ```bash
-   git tag -a v1.0.2 -m "v1.0.2 single-image"
+   git tag -a v1.0.3 -m "v1.0.3 single-image"
    git push origin main --tags
    ```
 3. 镜像推送到：
