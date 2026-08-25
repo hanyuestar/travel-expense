@@ -96,11 +96,9 @@ export function applyAuth(user) {
 export function renderHeader() {
   const u = store.user;
   const box = document.getElementById('userArea');
-  const guest = document.getElementById('guestArea');
-  if (!box || !guest) return;
+  if (!box) return;
   if (u) {
     box.classList.remove('hidden');
-    guest.classList.add('hidden');
     const name = u.username || u.email || ('#' + u.id);
     document.getElementById('userName').textContent = name;
     const adminLink = document.getElementById('adminLink');
@@ -112,14 +110,6 @@ export function renderHeader() {
     if (headRole) headRole.textContent = u.role === 'admin' ? '管理员' : '用户';
   } else {
     box.classList.add('hidden');
-    // 登录/注册页不再重复显示顶部"登录/注册"按钮：此时 hash 已是 #/login|#/register，
-    // 若仍显示该区域，点"登录"会因 navigate 目标与当前 hash 相同而不触发 hashchange，表现为"没反应"。
-    const r = (location.hash || '').slice(1);
-    if (r === '/login' || r === '/register') {
-      guest.classList.add('hidden');
-    } else {
-      guest.classList.remove('hidden');
-    }
   }
 }
 

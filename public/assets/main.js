@@ -20,7 +20,7 @@ async function guard() {
 async function render() {
   if (!(await guard())) return;
   const route = location.hash || '#/workbench';
-  renderHeader();   // 同步顶部：登录/注册页隐藏 guestArea，其余页显示
+  renderHeader();   // 同步顶部用户区（已登录显示菜单，未登录隐藏）
 
   if (route.startsWith('#/login')) { renderLogin(); return; }
   if (route.startsWith('#/register')) { renderRegister(); return; }
@@ -52,8 +52,6 @@ async function init() {
 }
 
 function bindHeaderEvents() {
-  document.getElementById('headerLoginBtn').onclick = () => navigate('/login');
-  document.getElementById('headerRegisterBtn').onclick = () => navigate('/register');
   document.getElementById('logoutBtn').onclick = async () => {
     try { await api.post('/auth/logout'); } catch (e) { /* ignore */ }
     store.user = null;
