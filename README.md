@@ -39,6 +39,15 @@
 
 ## 📌 版本变更记录
 
+### v1.0.5（2026-09-01）
+新增安卓客户端 + 跨域直连能力（向后兼容 v1.0.4 数据，无需迁移）：
+- **安卓客户端（Capacitor 原生壳）**：新增 `android-app/` 工程，将网页 SPA 打包为原生 APP，手机桌面常驻、离线可开 UI；详见下方「📱 安卓客户端」。
+- **内置服务器地址**：APP 安装包可烧录服务器地址（Web 端经 `window.TE_BUILTIN_SERVER` 读取），用户免填写、免在小屏手输长链接；未内置时仍保留「切换服务器」入口。
+- **账号归属校验**：新增 `GET /api/public/server-check`；登录时校验账号是否归属当前服务器，非本服务器账号返回 `404 ACCOUNT_NOT_FOUND`（区分「密码错」与「账号不在此服务器」）。
+- **跨域直连支撑**：新增 `ALLOWED_ORIGINS` 环境变量与 CORS 预检放行；`COOKIE_SECURE=true` 时跨域会话 Cookie 带 `Secure; SameSite=None`，配合 WebView 第三方 Cookie 开关，APP 内登录态可持久化。
+- **CSP 自适应**：仅在开启 `ALLOWED_ORIGINS` 时放宽 `connect-src` 至 `https:`，避免浏览器内跨域客户端被安全策略拦截。
+- 验证：全量回归 6 脚本 181 用例通过；模拟 WebView 跨域端到端（server-check / 预检 / 登录态 Cookie / 带会话取数）全绿。
+
 ### v1.0.4（2026-08-24）
 缺陷修复（无功能删减，向后兼容 v1.0.3 数据）：
 - **彻底移除顶部 header 的「登录 / 注册」按钮**：此前顶部按钮与登录页表单重复，且在登录页点击顶部「登录」执行 `navigate('/login')` 时因当前 hash 已是 `#/login`、`hashchange` 不触发而「无任何反应」，用户误以为登录功能损坏。现删除 header 中的 `guestArea`，登录 / 注册入口统一收敛到登录页表单（`#/login` / `#/register` 由路由守卫自动跳转）。header 右侧在未登录时为空，已登录时仅显示用户菜单。
@@ -65,7 +74,7 @@ mkdir -p /volume1/docker/travel
 cd /volume1/docker/travel
 curl -O https://raw.githubusercontent.com/hanyuestar/travel-expense/main/docker-compose.yml
 
-# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.4）
+# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.5）
 docker compose up -d
 
 # 3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
@@ -76,7 +85,7 @@ docker compose up -d
 ```yaml
 services:
   travel-expense:
-    image: ghcr.io/hanyuestar/travel-expense:v1.0.4
+    image: ghcr.io/hanyuestar/travel-expense:v1.0.5
     container_name: travel-expense
     restart: unless-stopped
     ports:
@@ -86,6 +95,9 @@ services:
     environment:
       - PORT=3000
       - DATA_DIR=/data
+      # ↓↓↓ 安卓 APP 直连所需（否则 APP 内登录态无法持久化 / 跨域被拒）↓↓↓
+      - COOKIE_SECURE=true        # 服务器处于 HTTPS 反代之后必须置 true
+      - ALLOWED_ORIGINS=*         # 允许安卓 WebView 跨域调用 API 并携带凭证（* 表示允许任意来源）
 ```
 
 > 首次启动会自动写入示例路线数据；数据只存在你的磁盘上（`/volume1/docker/travel/app.db`）。
@@ -108,7 +120,7 @@ docker run -d --name travel-expense \
   -p 8108:3000 \
   -v /your/path/data:/data \
   --restart unless-stopped \
-  ghcr.io/hanyuestar/travel-expense:v1.0.4
+  ghcr.io/hanyuestar/travel-expense:v1.0.5
 ```
 
 ### 方式 C：手动运行（无 Docker，需 Node 18+）
@@ -118,6 +130,34 @@ cd travel-expense/server
 npm install            # 编译 better-sqlite3
 node app.js            # 默认端口 3000；后端自动托管 public/ 前端，数据在 ../data/app.db
 ```
+
+---
+
+## 📱 安卓客户端（Android APP）
+
+把网页版打包成手机原生 APP：桌面常驻图标、离线可开 UI、登录后像原生应用一样使用。APP 通过 `fetch` **直连你自托管的服务器**，数据仍全在你自己的服务器上，APP 本身不另存数据。
+
+### 快速使用（已发布 APK）
+前往 GitHub Release 下载 **v1.0.5** 的 `app-debug.apk`，手机允许「未知来源」安装后打开即可——**服务器地址已内置，打开即用，无需填写**。
+
+> 该发布包已内置作者服务器地址；若你用自己的服务器，请按下面「自己构建」重新打包。
+
+### 自己构建
+前置：Node 18+、**JDK 17**、Android SDK（cmdline-tools + `platforms;android-34` + `build-tools;34.0.0`）。
+
+```bash
+cd android-app
+npm install                                       # 安装 Capacitor CLI
+cp .te-server-url.example .te-server-url         # 填入你的服务器地址（如 https://your-domain.example.com:8108）
+npm run sync                                     # 拷贝 public/ 进安卓资源 + 注入内置服务器地址
+npm run build                                    # 产物：android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+> - 内置地址写入 `android/app/src/main/assets/public/index.html`（`<script>window.TE_BUILTIN_SERVER="..."</script>`），**不会进入公开仓库**（`.te-server-url` 已被 gitignore）。
+> - 详细构建与「WebView 第三方 Cookie」必改项见 `android-app/README.md`。
+
+### 服务端配合（关键）
+安卓 APP 跨域直连需要服务端开启：在 `docker-compose.yml` 中设置 `COOKIE_SECURE=true` 与 `ALLOWED_ORIGINS=*`（v1.0.5 示例 compose 已默认写入）。否则会出现「登录成功但刷新又退出」「API 被 CORS 拒绝」。
 
 ---
 
@@ -131,6 +171,7 @@ node app.js            # 默认端口 3000；后端自动托管 public/ 前端�
 | `DATA_DIR` | `../data` | 数据目录（`app.db` + 种子 `routes.json` + `logs/`） |
 | `DB_FILE` | `app.db` | SQLite 文件名 |
 | `COOKIE_SECURE` | `false` | 设 `true`（HTTPS 反代场景）后 Cookie 带 `Secure`，并启用 HSTS |
+| `ALLOWED_ORIGINS` | 空 | 逗号分隔的允许跨域来源（如 `http://localhost`）；设 `*` 允许任意来源。**安卓 APP 直连需开启**（否则跨域 API 被 CORS 拒绝、登录态无法持久） |
 | `FX_API_URL` | 空 | 实时汇率 API 地址（返回 `{rates:{USD:7.15}}` 或扁平 `{USD:7.15}`）；配置后启用定时刷新，未配置则用内置静态兜底汇率 |
 | `FX_REFRESH_INTERVAL_MS` | `21600000`（6h） | 汇率刷新间隔 |
 | `TRUSTED_HOSTS` | 空 | 可信主机名逗号分隔；配置后 CSRF 严格校验 `Host`（防 Host 头伪造） |
@@ -186,7 +227,7 @@ node tests/run-all.js                     # 一条命令跑全部测试（主回
 1. ghcr 发布无需配置（自动注入 `GITHUB_TOKEN`）；Docker Hub 需配置 Secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（未配置则自动跳过 Docker Hub，不影响 ghcr）。
 2. 打版本 tag 并推送即触发构建（linux/amd64 + arm64 双架构）：
    ```bash
-   git tag -a v1.0.4 -m "v1.0.4 single-image"
+   git tag -a v1.0.5 -m "v1.0.5 single-image"
    git push origin main --tags
    ```
 3. 镜像推送到：
@@ -230,6 +271,11 @@ travel-expense/
 │       ├── app.js                     # 工作台（列表/统计/表单/个人中心/分享）
 │       ├── admin.js                   # 管理后台 6 页
 │       └── charts.js                  # 手写 SVG 环形图/柱状图（本位币）
+├── android-app/                       # 安卓客户端工程（Capacitor 原生壳，webDir→public/）
+│   ├── capacitor.config.js            # 打包配置（appId / appName / webDir）
+│   ├── scripts/inject-server.mjs      # 构建时注入内置服务器地址（读取 .te-server-url，不入库）
+│   ├── .te-server-url.example         # 服务器地址模板（复制为 .te-server-url 填入你的地址）
+│   └── README.md                      # 构建与「WebView 第三方 Cookie」必改项说明
 ├── tests/                             # 回归 + 冒烟测试（run-all.js 一键全跑）
 ├── demo/index.html                    # 纯前端演示（单用户，数据存浏览器）
 ├── data/                              # 运行时卷：app.db + 种子 routes.json（gitignore）

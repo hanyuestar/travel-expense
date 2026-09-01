@@ -11,7 +11,9 @@
 #      因此日志文件和 app.db 共享同一个数据卷，随数据一起持久化迁移
 services:
   travel-expense:
-    image: ghcr.io/hanyuestar/travel-expense:v1.0.2
+    # 安卓客户端（Capacitor）需要服务端开启跨域：v1.0.5 起支持 /api/public/server-check、
+    # 账号归属校验（404 ACCOUNT_NOT_FOUND）、CORS 与跨域会话 Cookie。
+    image: ghcr.io/hanyuestar/travel-expense:v1.0.5
     container_name: travel-expense
     restart: unless-stopped
     ports:
@@ -21,3 +23,9 @@ services:
     environment:
       - PORT=3000
       - DATA_DIR=/data
+      # ↓↓↓ 安卓 APP 直连所需（否则 APP 内登录态无法持久化 / 跨域被拒）↓↓↓
+      # 服务器处于 HTTPS 反向代理之后必须置 true，跨域会话 Cookie 才会带 Secure 被 WebView 接受
+      - COOKIE_SECURE=true
+      # 允许安卓 WebView 来源跨域调用 API 并携带凭证；* 表示允许任意来源（自托管场景可接受），
+      # 也可改为更严格的 'http://localhost'（安卓 WebView 默认来源）
+      - ALLOWED_ORIGINS=*
