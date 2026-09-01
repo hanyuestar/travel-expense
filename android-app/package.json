@@ -8,7 +8,7 @@
     "copy": "cap copy android && node scripts/inject-server.mjs",
     "sync": "cap sync android && node scripts/inject-server.mjs && node scripts/patch-native.mjs",
     "inject": "node scripts/inject-server.mjs",
-    "build": "npm run sync && cap build android",
+    "build": "npm run sync && cd android && ./gradlew assembleDebug",
     "open": "cap open android"
   },
   "devDependencies": {
