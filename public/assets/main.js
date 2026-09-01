@@ -1,12 +1,17 @@
 /* main.js — 入口：hash 路由 + 守卫 + 全局事件（ES Module） */
-import { store, toast, api, navigate, fetchMe, applyAuth, renderHeader } from './api.js';
+import { store, toast, api, navigate, fetchMe, applyAuth, renderHeader, getServerUrl, setServerUrl } from './api.js';
 import { initAuth, renderLogin, renderRegister } from './auth.js';
 import { loadRoutes, renderWorkbench, renderStats, renderProfile, bindFormEvents } from './app.js';
 import { renderAdmin, bindAdminEvents } from './admin.js';
 
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 async function guard() {
   const route = location.hash || '#/workbench';
   const u = store.user;
+
+  /* 服务器设置页：未登录也可访问（用于首次连接自托管服务器） */
+  if (route.startsWith('#/setup')) return true;
 
   if (route.startsWith('#/login') || route.startsWith('#/register')) {
     if (u) { navigate('/workbench'); return false; }
@@ -17,11 +22,43 @@ async function guard() {
   return true;
 }
 
+/* 首次启动或切换服务器：连接自托管服务器 */
+async function renderSetup() {
+  const view = document.getElementById('view');
+  const cur = getServerUrl();
+  view.innerHTML = `
+    <div class="auth-card">
+      <h1>连接你的服务器</h1>
+      <p class="muted">输入你部署的「旅行经费工作台」服务器地址。登录后，账号与全部路线数据将自动与该服务器云端同步。</p>
+      ${cur ? `<p class="muted">当前服务器：<code>${esc(cur)}</code></p>` : ''}
+      <label>服务器地址</label>
+      <input id="setupUrl" class="inp" placeholder="https://travel.example.com" value="${cur ? esc(cur) : ''}" />
+      <div id="setupErr" class="err"></div>
+      <button id="setupBtn" class="btn btn-primary btn-block">连接并继续</button>
+    </div>`;
+  document.getElementById('setupBtn').onclick = async () => {
+    const v = document.getElementById('setupUrl').value.trim().replace(/\/+$/, '');
+    if (!v) { document.getElementById('setupErr').textContent = '请输入服务器地址'; return; }
+    setServerUrl(v);
+    try {
+      const r = await api.get('/public/server-check');
+      if (!r || !r.isTravelExpense) throw new Error('该地址不是有效的旅行经费服务器');
+      navigate('/login');
+    } catch (e) {
+      setServerUrl('');
+      document.getElementById('setupErr').textContent = (e && e.message) ? e.message : '无法连接该服务器，请检查地址或网络';
+    }
+  };
+}
+
 async function render() {
   if (!(await guard())) return;
   const route = location.hash || '#/workbench';
+  /* 未配置服务器时，强制进入连接页（仅服务器设置页除外） */
+  if (!getServerUrl() && !route.startsWith('#/setup')) { navigate('/setup'); return; }
   renderHeader();   // 同步顶部用户区（已登录显示菜单，未登录隐藏）
 
+  if (route.startsWith('#/setup')) { renderSetup(); return; }
   if (route.startsWith('#/login')) { renderLogin(); return; }
   if (route.startsWith('#/register')) { renderRegister(); return; }
   if (route.startsWith('#/profile')) { renderProfile(); return; }
@@ -64,6 +101,8 @@ function bindHeaderEvents() {
   };
   document.getElementById('profileLink').onclick = () => { document.getElementById('userMenu').classList.remove('open'); navigate('/profile'); };
   document.getElementById('adminLink').onclick = () => { document.getElementById('userMenu').classList.remove('open'); navigate('/admin/overview'); };
+  const switchBtn = document.getElementById('switchServerBtn');
+  if (switchBtn) switchBtn.onclick = () => { document.getElementById('userMenu').classList.remove('open'); setServerUrl(''); navigate('/setup'); };
   document.getElementById('homeLink').onclick = () => navigate('/workbench');
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.menu')) document.getElementById('userMenu').classList.remove('open');

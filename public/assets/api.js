@@ -30,15 +30,20 @@ export function toast(msg, ms = 2200) {
   el._t = setTimeout(() => el.classList.remove('show'), ms);
 }
 
+/* 客户端可连接任意自托管服务器：服务器地址存于 localStorage（te_server_url）。
+ * 为空则同源（默认 Web 应用模式）。安卓 APP 等独立客户端在此填入用户服务器地址。 */
+export function getServerUrl() { return (localStorage.getItem('te_server_url') || '').replace(/\/+$/, ''); }
+export function setServerUrl(u) { if (u) localStorage.setItem('te_server_url', u.replace(/\/+$/, '')); else localStorage.removeItem('te_server_url'); }
+
 async function request(method, path, body) {
-  const opt = { method, credentials: 'same-origin', mode: 'same-origin' };
+  const opt = { method, credentials: 'include', mode: 'cors' };
   if (body !== undefined) {
     opt.headers = { 'Content-Type': 'application/json' };
     opt.body = JSON.stringify(body);
   }
   let r;
   try {
-    r = await fetch('/api' + path, opt);
+    r = await fetch(getServerUrl() + '/api' + path, opt);
   } catch (e) {
     /* 移动网络/证书/代理异常时 fetch 抛 TypeError（消息常为 Failed to fetch），提示不友好 */
     const isNetwork = !e.status && (e.name === 'TypeError' || /failed to fetch|network|net::err/i.test(e.message));

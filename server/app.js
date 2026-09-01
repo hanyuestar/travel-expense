@@ -34,19 +34,50 @@ const fxTimer = setInterval(refreshFx, config.FX_REFRESH_INTERVAL_MS);
 fxTimer.unref(); // 不阻止进程退出
 
 /* ---------- 安全响应头（所有响应统一设置） ---------- */
-const SECURITY_HEADERS = {
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  /* CSP：script 仅同源（ES Modules 无内联脚本）；style 允许内联（大量 style 属性）；
-     frame-ancestors 'none' 等价 X-Frame-Options DENY；connect 仅同源 API */
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
-};
-if (config.COOKIE_SECURE) {
-  SECURITY_HEADERS['Strict-Transport-Security'] = `max-age=${config.HSTS_MAX_AGE}; includeSubDomains`;
+function buildSecurityHeaders() {
+  /* 开启跨域客户端（安卓 APP 等独立客户端）时放宽 connect-src：
+     WebView 内的 SPA 需向用户自托管的 https 服务器发起跨域请求。
+     WebView 本身不加载本服务的 CSP（SPA 由 capacitor://localhost 提供），
+     此处放宽同时覆盖「浏览器内配置远程服务器」的客户端场景。 */
+  const connectSrc = config.ALLOWED_ORIGINS.length > 0
+    ? "connect-src 'self' https:;"
+    : "connect-src 'self';";
+  const h = {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    /* CSP：script 仅同源（ES Modules 无内联脚本）；style 允许内联（大量 style 属性）；
+       frame-ancestors 'none' 等价 X-Frame-Options DENY */
+    'Content-Security-Policy': `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; ${connectSrc} frame-ancestors 'none'`
+  };
+  if (config.COOKIE_SECURE) {
+    h['Strict-Transport-Security'] = `max-age=${config.HSTS_MAX_AGE}; includeSubDomains`;
+  }
+  return h;
 }
 function applySecurityHeaders(res) {
-  for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
+  const h = buildSecurityHeaders();
+  for (const [k, v] of Object.entries(h)) res.setHeader(k, v);
+}
+
+/* ---------- CORS：仅当配置 ALLOWED_ORIGINS 时启用（默认关闭，保持同源 Web 应用不变） ----------
+ * 回显请求 Origin（支持带凭证的跨域）；OPTIONS 预检直接 204。 */
+function applyCors(req, res) {
+  if (config.ALLOWED_ORIGINS.length === 0) return false;
+  const origin = (req.headers.origin || '').toLowerCase();
+  if (!origin) return false;
+  const allowAll = config.ALLOWED_ORIGINS.includes('*');
+  if (!allowAll && !config.ALLOWED_ORIGINS.includes(origin)) return false;
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return true;
+  }
+  return false;
 }
 
 /* ---------- 访问日志 ---------- */
@@ -64,11 +95,16 @@ function sameOrigin(req) {
   if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return true;
   const host = (req.headers.host || '').toLowerCase();
   if (!host) return true;
+  /* 跨域客户端来源：命中 ALLOWED_ORIGINS 视为可信，放行写操作（配合 CORS 头） */
+  const origin = (req.headers.origin || '').toLowerCase();
+  if (config.ALLOWED_ORIGINS.length > 0 && origin &&
+      (config.ALLOWED_ORIGINS.includes('*') || config.ALLOWED_ORIGINS.includes(origin))) {
+    return true;
+  }
   /* 可信主机校验：配置后 Host 必须匹配可信域名（含端口） */
   if (config.TRUSTED_HOSTS.length > 0 && !config.TRUSTED_HOSTS.includes(host)) {
     return false;
   }
-  const origin = req.headers.origin;
   const referer = req.headers.referer;
   if (!origin && !referer) return true;
   const sameHost = (u) => { try { return new URL(u).host.toLowerCase() === host; } catch { return false; } };
@@ -79,6 +115,8 @@ function sameOrigin(req) {
 const server = http.createServer(async (req, res) => {
   const startMs = Date.now();
   applySecurityHeaders(res);
+  /* CORS 预检/跨域头：若命中 ALLOWED_ORIGINS，OPTIONS 在此直接结束 */
+  if (applyCors(req, res)) { accessLog(req, res, startMs, 204); return; }
   const url = parseUrl(req.url || '/');
 
   /* 健康检查（含 DB 连通性校验） */
@@ -111,6 +149,20 @@ const server = http.createServer(async (req, res) => {
         home_currency: s.home_currency || 'CNY',
         fx_rates: fx.ratesToCny
       }
+    });
+  }
+
+  /* 客户端探测：独立客户端（安卓 APP）在「输入服务器地址」后调用，
+   * 确认该地址是一个 travel-expense 服务，并取回站点名/注册开关用于首屏展示。无需登录。 */
+  if (url.pathname === '/api/public/server-check') {
+    const s = db.prepare('SELECT * FROM site_settings WHERE id = 1').get() || {};
+    accessLog(req, res, startMs, 200);
+    return send(res, 200, {
+      ok: true,
+      isTravelExpense: true,
+      site_name: s.site_name || '旅行经费工作台',
+      allow_register: !!s.allow_register,
+      register_mode: s.register_mode || 'all'
     });
   }
 

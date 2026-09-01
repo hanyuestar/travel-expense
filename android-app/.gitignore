@@ -1,0 +1,12 @@
+# 依赖
+node_modules/
+
+# Capacitor 生成的原生工程（由 `cap add android` 生成，不应入库；
+# 它体积大且含平台相关配置，应在 CI / 开发者机器上按需重建）
+android/
+
+# 本地构建产物
+*.apk
+*.aab
+.gradle/
+local.properties

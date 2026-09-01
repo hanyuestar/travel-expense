@@ -19,6 +19,10 @@ module.exports = {
   FX_REFRESH_INTERVAL_MS: 6 * 3600 * 1000, // 汇率刷新间隔 6 小时
   // 可选：可信主机名列表（逗号分隔），配置后 CSRF 校验严格匹配 Host；未配置则用请求 Host
   TRUSTED_HOSTS: (process.env.TRUSTED_HOSTS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+  // 可选：允许跨域访问 API 的客户端来源（逗号分隔），用于独立客户端（安卓 APP）跨域调用。
+  // 例如 'capacitor://localhost,https://app.example.com'；设为 '*' 允许任意来源。
+  // 配置后写入操作（POST 等）放行这些来源，并回显 CORS 头（含 Allow-Credentials）。
+  ALLOWED_ORIGINS: (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
   // 访问日志：默认开启，设 false 关闭
   ACCESS_LOG: process.env.ACCESS_LOG !== 'false',
   // HSTS：仅在 COOKIE_SECURE=true 时生效

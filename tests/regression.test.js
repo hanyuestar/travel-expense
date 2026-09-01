@@ -108,7 +108,7 @@ async function main() {
   r = await req('POST', '/api/auth/login', { login: 'alice', password: 'wrong' });
   check('密码错误 → 401 INVALID_CREDENTIAL 不区分（§3.2）', r.status === 401 && r.json.code === 'INVALID_CREDENTIAL', r);
   r = await req('POST', '/api/auth/login', { login: 'nosuchuser', password: 'whatever123' });
-  check('用户不存在 → 401（不泄露存在性）', r.status === 401 && r.json.code === 'INVALID_CREDENTIAL', r);
+  check('账号不属于该服务器 → 404 ACCOUNT_NOT_FOUND（独立客户端可据此提示「该服务器无此账号」）', r.status === 404 && r.json.code === 'ACCOUNT_NOT_FOUND', r);
 
   // 邮箱+密码登录
   if (user2Cookie) {

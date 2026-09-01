@@ -70,12 +70,15 @@ function touchSession(sid) {
   if (sid) db().prepare('UPDATE sessions SET last_active_at = ? WHERE id = ?').run(Date.now(), sid);
 }
 function setCookie(res, sid, maxAgeMs) {
-  const secure = config.COOKIE_SECURE ? '; Secure' : '';
+  /* 独立客户端（安卓 APP）以跨源方式携带会话 Cookie，需 SameSite=None；
+   * SameSite=None 必须配合 Secure，故仅在 COOKIE_SECURE=true（HTTPS）时启用。 */
+  const attr = config.COOKIE_SECURE ? '; Secure; SameSite=None' : '; SameSite=Lax';
   res.setHeader('Set-Cookie',
-    `sid=${sid}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.round(maxAgeMs / 1000)}${secure}`);
+    `sid=${sid}; HttpOnly${attr}; Path=/; Max-Age=${Math.round(maxAgeMs / 1000)}`);
 }
 function clearCookie(res) {
-  res.setHeader('Set-Cookie', 'sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+  const attr = config.COOKIE_SECURE ? '; Secure; SameSite=None' : '; SameSite=Lax';
+  res.setHeader('Set-Cookie', `sid=; HttpOnly${attr}; Path=/; Max-Age=0`);
 }
 
 /* 读取会话并返回用户；失败返回 null（不抛错）
@@ -254,7 +257,10 @@ async function handle(req, res, url, body) {
 
       let user = db().prepare('SELECT * FROM users WHERE username = ?').get(login)
         || db().prepare('SELECT * FROM users WHERE email = ?').get(login);
-      if (!user) return fail(res, 401, '账号或密码错误', { code: 'INVALID_CREDENTIAL' });
+      /* 独立客户端（安卓 APP）需要先确认账号是否归属于该服务器：
+       * 账号不存在返回 404 ACCOUNT_NOT_FOUND，与密码错的 401 INVALID_CREDENTIAL 区分。
+       * 自托管场景下服务器为用户自有，放开账号枚举风险可接受。 */
+      if (!user) return fail(res, 404, '该服务器不存在此账号', { code: 'ACCOUNT_NOT_FOUND' });
       if (user.status === 'banned') return fail(res, 403, '禁止用户登录', { code: 'BANNED' });
 
       let credentialOk = false;
