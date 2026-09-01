@@ -138,7 +138,9 @@ node app.js            # 默认端口 3000；后端自动托管 public/ 前端�
 把网页版打包成手机原生 APP：桌面常驻图标、离线可开 UI、登录后像原生应用一样使用。APP 通过 `fetch` **直连你自托管的服务器**，数据仍全在你自己的服务器上，APP 本身不另存数据。
 
 ### 快速使用（已发布 APK）
-前往 GitHub Release 下载 **v1.0.5** 的 `app-debug.apk`，手机允许「未知来源」安装后打开即可——**服务器地址已内置，打开即用，无需填写**。
+- **下载**：[`app-debug.apk`（v1.0.5）](https://github.com/hanyuestar/travel-expense/releases/download/v1.0.5/app-debug.apk)
+- 备用地址：<https://github.com/hanyuestar/travel-expense/releases/tag/v1.0.5>
+- 手机允许「未知来源」安装后打开即可——**服务器地址已内置，打开即用，无需填写**。
 
 > 该发布包已内置作者服务器地址；若你用自己的服务器，请按下面「自己构建」重新打包。
 
