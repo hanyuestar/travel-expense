@@ -23,6 +23,7 @@ package com.hanyuestar.travelexpense;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
+import android.net.http.SslError;
 import android.webkit.CookieManager;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebView;
@@ -102,7 +103,7 @@ public class MainActivity extends BridgeActivity {
     WebView wv = getBridge().getWebView();
     wv.setWebViewClient(new BridgeWebViewClient(getBridge()) {
       @Override
-      public void onReceivedSslError(WebView view, SslErrorHandler handler, android.webkit.SslError error) {
+      public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
         String url = error.getUrl();
         String host = (url != null) ? Uri.parse(url).getHost() : null;
         if (host != null && trustedHosts.contains(host.toLowerCase())) {
