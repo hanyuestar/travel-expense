@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: '镜像标签（默认 v1.0.5；免动 git tag 时用于重建同名镜像）'
+        required: false
+        default: 'v1.0.5'
 
 jobs:
   push:
@@ -20,6 +25,21 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
+
+      - name: Decide image tags
+        id: tags
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.image_tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          {
+            echo "list<<EOF"
+            echo "type=raw,value=${TAG}"
+            echo "type=raw,value=latest"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Save version info
         run: |
@@ -51,8 +71,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
-          flavor: |
-            latest=true
+          tags: ${{ steps.tags.outputs.list }}
 
       - name: Build and push to GHCR
         uses: docker/build-push-action@v6
@@ -71,8 +90,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.DH_USER }}/travel-expense
-          flavor: |
-            latest=true
+          tags: ${{ steps.tags.outputs.list }}
 
       - name: Build and push to Docker Hub
         if: ${{ env.DH_USER != '' && env.DH_TOKEN != '' }}
