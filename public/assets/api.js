@@ -32,13 +32,27 @@ export function toast(msg, ms = 2200) {
 
 /* 客户端可连接任意自托管服务器：
  * - 优先用用户手动配置的地址（localStorage te_server_url，对应「切换服务器」）；
- * - 其次用打包时内置的服务器地址（window.TE_BUILTIN_SERVER，由安卓构建脚本注入，用户无需填写/查看）；
- * - 都为空则同源（默认 Web 应用模式，SPA 由同一服务器托管）。 */
+ * - 其次用打包时内置的服务器地址（window.TE_BUILTIN_SERVER，仅安卓 APK 注入）；
+ * - 都为空且当前在浏览器（非 Capacitor/WebView）环境下，自动使用页面 origin 作为同源服务器地址；
+ * - Capacitor/APK 环境下无前两项则保持为空，进入 setup 由用户输入。 */
 const BUILTIN_SERVER_URL = (typeof window !== 'undefined' && window.TE_BUILTIN_SERVER)
   ? String(window.TE_BUILTIN_SERVER).replace(/\/+$/, '') : '';
 export const HAS_BUILTIN_SERVER = !!BUILTIN_SERVER_URL;
+
+function isBrowserOrigin() {
+  if (typeof window === 'undefined' || !window.location) return false;
+  if (window.Capacitor || window.CapacitorNative || window.__CAPACITOR__) return false;
+  const proto = window.location.protocol;
+  return proto === 'http:' || proto === 'https:';
+}
+
+function getDefaultServerUrl() {
+  if (!isBrowserOrigin()) return '';
+  return (window.location.origin || '').replace(/\/+$/, '');
+}
+
 export function getServerUrl() {
-  return (localStorage.getItem('te_server_url') || BUILTIN_SERVER_URL || '').replace(/\/+$/, '');
+  return (localStorage.getItem('te_server_url') || BUILTIN_SERVER_URL || getDefaultServerUrl() || '').replace(/\/+$/, '');
 }
 export function setServerUrl(u) { if (u) localStorage.setItem('te_server_url', u.replace(/\/+$/, '')); else localStorage.removeItem('te_server_url'); }
 

@@ -152,17 +152,19 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  /* 客户端探测：独立客户端（安卓 APP）在「输入服务器地址」后调用，
-   * 确认该地址是一个 travel-expense 服务，并取回站点名/注册开关用于首屏展示。无需登录。 */
+  /* 客户端探测：独立客户端（安卓 APP / 切换服务器）调用，确认该地址是 travel-expense 服务。
+   * 返回结构与 /api/public/site 一致：data 内包业务字段。 */
   if (url.pathname === '/api/public/server-check') {
     const s = db.prepare('SELECT * FROM site_settings WHERE id = 1').get() || {};
     accessLog(req, res, startMs, 200);
     return send(res, 200, {
       ok: true,
-      isTravelExpense: true,
-      site_name: s.site_name || '旅行经费工作台',
-      allow_register: !!s.allow_register,
-      register_mode: s.register_mode || 'all'
+      data: {
+        isTravelExpense: true,
+        site_name: s.site_name || '旅行经费工作台',
+        allow_register: !!s.allow_register,
+        register_mode: s.register_mode || 'all'
+      }
     });
   }
 
