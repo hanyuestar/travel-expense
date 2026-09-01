@@ -162,9 +162,9 @@ npm run build                                    # 产物：android/app/build/ou
 安卓 APP 跨域直连需要服务端开启：在 `docker-compose.yml` 中设置 `COOKIE_SECURE=true` 与 `ALLOWED_ORIGINS=*`（v1.0.5 示例 compose 已默认写入）。否则会出现「登录成功但刷新又退出」「API 被 CORS 拒绝」。
 
 ### 关于「证书不被信任」（SSL）
-安卓 WebView 默认信任系统根证书；Let's Encrypt 证书本机原生信任。若登录时报「网站证据不被信任 / 证书不被信任」，绝大多数情况是**服务器证书的 SAN（主题备用名称）未覆盖你实际使用的子域名**。例如证书只签发给 `hanyueppy.synology.me`，而 APP 内置地址是 `travel.hanyueppy.synology.me:60005`——子域名不在证书内，WebView 即拒绝连接。
+安卓 WebView 默认信任系统根证书；Let's Encrypt 证书本机原生信任。若登录时报「网站证据不被信任 / 证书不被信任」，绝大多数情况是**服务器证书的 SAN（主题备用名称）未覆盖你实际使用的子域名**。例如证书只签发给 `your-domain.example.com`，而 APP 内置地址是 `app.your-domain.example.com`——子域名不在证书内，WebView 即拒绝连接。
 
-- **推荐（一劳永逸，PC/手机浏览器与 APP 同步修复）**：在服务器侧重新申请 Let's Encrypt 证书时，把所用子域名加入 SAN（或在 Synology 证书里勾选 `*.hanyueppy.synology.me` 通配符），并确保证书链完整。证书正确后无需改动 APP。
+- **推荐（一劳永逸，PC/手机浏览器与 APP 同步修复）**：在服务器侧重新申请 Let's Encrypt 证书时，把所用子域名加入 SAN（或在 Synology 证书里勾选 `*.your-domain.example.com` 通配符），并确保证书链完整。证书正确后无需改动 APP。
 - **APP 侧兜底（仅对你自己的服务器放宽）**：`MainActivity` 已内置「按主机放行」的 SSL 错误处理（见 `android-app/android/app/src/main/java/com/hanyuestar/travelexpense/MainActivity.java`）——仅当请求主机与你内置的服务器地址一致时才忽略证书信任错误，**不会**对任意主机盲目放行。适用于证书暂时无法改（内网/DDNS 限制）但需要 APP 立刻可用的情况。
 
 > 该兜底需重新构建并发布 APK 才生效（`npm run build` 后替换 Release 中的 `app-debug.apk`）。服务端证书修好后，该逻辑对正确证书不触发，行为与普通 WebView 一致。

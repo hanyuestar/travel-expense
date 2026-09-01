@@ -44,8 +44,8 @@ public class MainActivity extends BridgeActivity {
   // 仅在 SSL 证书「不被系统信任」时仍继续加载的服务器主机集合。
   //
   // 适用场景：用户自托管服务器使用了合法但 WebView 默认不信任的证书，例如
-  // Let's Encrypt 证书的 SAN 未覆盖所用子域名（如 hanyueppy.synology.me 签发的
-  // 证书不包含 travel.hanyueppy.synology.me），导致 APP 内请求报「证书不被信任」。
+  // Let's Encrypt 证书的 SAN 未覆盖所用子域名（如 your-domain.example.com 签发的
+  // 证书不包含 app.your-domain.example.com），导致 APP 内请求报「证书不被信任」。
   //
   // 安全边界：主机集合由构建时注入的 window.TE_BUILTIN_SERVER 自动推导，绝不硬编码
   // 任何具体域名到源码；且只对「命中本机已知服务器主机」的 SSL 错误放行，其余一律
