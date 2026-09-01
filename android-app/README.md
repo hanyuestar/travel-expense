@@ -19,6 +19,32 @@
 
 ---
 
+## 内置服务器地址（用户免输入，可选）
+
+如果不希望最终用户自己填写服务器地址，可在**本地构建时**把一个固定服务器地址「烧录」进 APP：
+
+1. 在 `android-app/` 新建 `.te-server-url` 文件，内容为你的服务器地址（含协议与端口），例如：
+
+   ```
+   https://travel.example.com
+   ```
+
+   该文件已写入 `.gitignore`，**不会进入公开仓库**；也可改用环境变量 `TE_SERVER_URL` 传入（优先级更高）。
+2. 照常 `npm run sync` / `npm run build`。构建脚本 `scripts/inject-server.mjs` 会把
+   `window.TE_BUILTIN_SERVER="你的地址"` 注入到 `android/app/src/main/assets/public/index.html`
+   （即生成的原生工程资源，**同样不入库**）。
+3. APP 检测到内置地址后：
+   - 首次启动**跳过「连接你的服务器」页**，直接进入登录；
+   - 用户菜单中的「切换服务器」自动隐藏；
+   - 所有请求直连该内置地址。
+
+> ⚠️ **隐私**：真实的服务器域名只存在于你本机的 `.te-server-url` / 环境变量 / 以及生成的 `android/` 产物中，
+> 三者均不入库。仓库源码（`public/`）里只有 `window.TE_BUILTIN_SERVER` 这个占位引用，个人域名不会泄露到开源仓库。
+
+> 后端仍需满足「服务器端需开启的开关」一节：HTTPS + `COOKIE_SECURE=true` + `ALLOWED_ORIGINS=*`。
+
+---
+
 ## 前置条件
 
 - Node.js ≥ 18（本机为 v22）

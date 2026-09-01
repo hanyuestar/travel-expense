@@ -10,3 +10,8 @@ android/
 *.aab
 .gradle/
 local.properties
+
+# 内置服务器地址（个人域名，严禁入库！仅用于本地构建注入安卓产物）
+# 内容形如：https://your-server.example.com
+# 也可用环境变量 TE_SERVER_URL 替代此文件。
+.te-server-url

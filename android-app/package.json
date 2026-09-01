@@ -5,9 +5,10 @@
   "description": "旅行经费工作台 — 安卓客户端（Capacitor 原生壳，直连用户自托管服务器）",
   "scripts": {
     "add": "cap add android",
-    "copy": "cap copy android",
-    "sync": "cap sync android",
-    "build": "cap build android",
+    "copy": "cap copy android && node scripts/inject-server.mjs",
+    "sync": "cap sync android && node scripts/inject-server.mjs",
+    "inject": "node scripts/inject-server.mjs",
+    "build": "npm run sync && cap build android",
     "open": "cap open android"
   },
   "devDependencies": {

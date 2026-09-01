@@ -1,5 +1,5 @@
 /* main.js — 入口：hash 路由 + 守卫 + 全局事件（ES Module） */
-import { store, toast, api, navigate, fetchMe, applyAuth, renderHeader, getServerUrl, setServerUrl } from './api.js';
+import { store, toast, api, navigate, fetchMe, applyAuth, renderHeader, getServerUrl, setServerUrl, HAS_BUILTIN_SERVER } from './api.js';
 import { initAuth, renderLogin, renderRegister } from './auth.js';
 import { loadRoutes, renderWorkbench, renderStats, renderProfile, bindFormEvents } from './app.js';
 import { renderAdmin, bindAdminEvents } from './admin.js';
@@ -10,8 +10,12 @@ async function guard() {
   const route = location.hash || '#/workbench';
   const u = store.user;
 
-  /* 服务器设置页：未登录也可访问（用于首次连接自托管服务器） */
-  if (route.startsWith('#/setup')) return true;
+  /* 服务器设置页：未登录也可访问（用于首次连接自托管服务器）。
+   * 若已内置服务器地址（打包时注入），则无需用户连接，重定向到登录。 */
+  if (route.startsWith('#/setup')) {
+    if (HAS_BUILTIN_SERVER) { navigate('/login'); return false; }
+    return true;
+  }
 
   if (route.startsWith('#/login') || route.startsWith('#/register')) {
     if (u) { navigate('/workbench'); return false; }
@@ -102,7 +106,14 @@ function bindHeaderEvents() {
   document.getElementById('profileLink').onclick = () => { document.getElementById('userMenu').classList.remove('open'); navigate('/profile'); };
   document.getElementById('adminLink').onclick = () => { document.getElementById('userMenu').classList.remove('open'); navigate('/admin/overview'); };
   const switchBtn = document.getElementById('switchServerBtn');
-  if (switchBtn) switchBtn.onclick = () => { document.getElementById('userMenu').classList.remove('open'); setServerUrl(''); navigate('/setup'); };
+  if (switchBtn) {
+    if (HAS_BUILTIN_SERVER) {
+      /* 服务器地址已内置，用户无需也不能切换 */
+      switchBtn.style.display = 'none';
+    } else {
+      switchBtn.onclick = () => { document.getElementById('userMenu').classList.remove('open'); setServerUrl(''); navigate('/setup'); };
+    }
+  }
   document.getElementById('homeLink').onclick = () => navigate('/workbench');
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.menu')) document.getElementById('userMenu').classList.remove('open');
