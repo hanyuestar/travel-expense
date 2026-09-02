@@ -83,7 +83,7 @@ export function renderWorkbench() {
     store.hideSeed = e.target.checked;
     localStorage.setItem('te_hide_seed', store.hideSeed ? '1' : '0');
     state.page = 1;
-    loadRoutes().then(() => { renderRoutes(); renderPager(); });
+    loadRoutes().then(() => { renderRoutes(); renderPager(); renderStats(); });
   };
   document.getElementById('newRouteBtn').onclick = () => openForm(null);
   document.getElementById('exportBtn').onclick = exportCsv;

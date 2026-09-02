@@ -29,6 +29,9 @@ function queryRoutes(userId, { year, q, hideSeed }) {
   let where = `(owner_id = ?`;
   if (!hideSeed) where += ` OR is_seed = 1`;
   where += `)`;
+  /* 隐藏系统示例：排除所有 is_seed=1 的示例路线（与所有者无关，
+   * 否则种子路线归 admin 所有时，管理员勾选「隐藏系统示例」无效） */
+  if (hideSeed) where += ` AND is_seed = 0`;
   if (year) { where += ` AND year = ?`; args.push(String(year)); }
   if (q) {
     where += ` AND (name LIKE ? ESCAPE '\\' OR dest LIKE ? ESCAPE '\\' OR scenic LIKE ? ESCAPE '\\')`;
