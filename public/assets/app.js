@@ -1,6 +1,6 @@
 /* app.js — 工作台（路线列表 + 年度统计 + 路线表单 + 个人中心） */
-import { store, toast, api, navigate, esc, fmt, fmtMoney, toHome, parseStart, fmtTime } from './api.js';
-import { CATS, COLORS, totalOf, donut, trendBar } from './charts.js';
+import { store, toast, api, navigate, esc, fmt, fmtMoney, CATS, parseStart, fmtTime } from './api.js';
+import { COLORS, totalOf, donut, trendBar } from './charts.js';
 
 let routes = [];
 let state = { filterYear: 'all', search: '', curId: null, detailId: null, page: 1, total: 0, pageSize: 50 };
@@ -69,7 +69,7 @@ export function renderWorkbench() {
         <div class="legend" id="catLegend"></div>
       </div>
       <div class="panel">
-        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-3 3"/></svg>逐年花费趋势</h3>
+        <h3 id="trendTitle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-3 3"/></svg>逐年花费趋势</h3>
         <div id="trendChart"></div>
       </div>
     </div>
@@ -248,26 +248,39 @@ function homeMoney(v) { return fmtMoney(v, store.site.home_currency); }
 function card(k, v, color) {
   return `<div class="stat"><div class="v"${color ? ` style="color:${color}"` : ''}>${v}</div><div class="l">${k}</div></div>`;
 }
-export function renderStats() {
-  const scope = visible();
-  const total = scope.reduce((s, r) => s + toHome(totalOf(r), r.currency), 0);
-  const count = scope.length;
-  const days = scope.reduce((s, r) => s + (parseInt(r.days) || 0), 0);
+/* 统计改为消费服务端 /api/routes/stats/summary 与 /stats/trend（按本位币聚合多币种），
+ * 删除此前前端对已加载 routes 的重复聚合（原实现仅覆盖当前分页，与全量口径不一致）。 */
+export async function renderStats() {
+  const params = new URLSearchParams();
+  if (store.hideSeed) params.set('hideSeed', '1');
+  if (state.filterYear && state.filterYear !== 'all') params.set('year', state.filterYear);
+  const q = state.search.trim();
+  if (q) params.set('q', q);
+  const qs = params.toString();
+
+  let summary;
+  try { summary = await api.get('/routes/stats/summary' + (qs ? '?' + qs : '')); }
+  catch (e) { toast('统计加载失败：' + e.message); return; }
+  if (!summary) return;
+
+  const home = store.site.home_currency || 'CNY';
+  const total = summary.grand;
+  const count = summary.count;
+  const days = summary.days;
   const avg = count ? Math.round(total / count) : 0;
-  const budgetTotal = scope.reduce((s, r) => s + toHome(parseFloat(r.budget_total) || 0, r.currency), 0);
-  const remaining = budgetTotal - total;
+  const budgetTotal = summary.budgetTotal;
+  const remaining = summary.remaining;
+
   const cards = document.getElementById('statCards');
-  if (cards) cards.innerHTML = card('总花费(' + (store.site.home_currency || 'CNY') + ')', homeMoney(total))
+  if (cards) cards.innerHTML = card('总花费(' + home + ')', homeMoney(total))
     + card('出行次数', count + ' 次') + card('次均花费', homeMoney(avg)) + card('总天数', days + ' 天')
     + card('总预算', homeMoney(budgetTotal)) + card('结余', homeMoney(remaining), remaining < 0 ? 'var(--danger)' : '');
 
-  const catTot = {};
-  CATS.forEach(c => (catTot[c] = 0));
-  scope.forEach(r => CATS.forEach(c => (catTot[c] += toHome(parseFloat(r.exp[c]) || 0, r.currency))));
-  const data = CATS.filter(c => catTot[c] > 0).map(c => ({ label: c, value: catTot[c], color: COLORS[c] }));
+  const catTot = summary.totalByCat || {};
+  const data = CATS.filter(c => (catTot[c] || 0) > 0).map(c => ({ label: c, value: catTot[c], color: COLORS[c] }));
   const chart = document.getElementById('catChart');
   const legend = document.getElementById('catLegend');
-  if (chart) chart.innerHTML = donut(data, store.site.home_currency);
+  if (chart) chart.innerHTML = donut(data, home);
   if (legend) {
     legend.innerHTML = data.map(d => {
       const pct = total > 0 ? Math.round(d.value / total * 100) : 0;
@@ -275,23 +288,24 @@ export function renderStats() {
         <span>${d.label}</span><span class="lp">${pct}%</span><span class="lv">${homeMoney(d.value)}</span></div>`;
     }).join('') || '<div class="empty">暂无花费数据</div>';
   }
-  /* 年度列表从 scope 派生，确保统计卡、趋势图、年度表口径一致 */
-  const ys = [...new Set(scope.map(r => r.year))].filter(Boolean).sort((a, b) => b.localeCompare(a));
+
+  let trend = [];
+  try { trend = await api.get('/routes/stats/trend' + (qs ? '?' + qs : '')) || []; } catch (e) { trend = []; }
   const trendEl = document.getElementById('trendChart');
+  const trendTitle = document.getElementById('trendTitle');
   if (trendEl) {
-    const points = ys.map(y => ({
-      label: y,
-      value: scope.filter(r => r.year === y).reduce((s, r) => s + toHome(totalOf(r), r.currency), 0)
-    }));
-    trendEl.innerHTML = trendBar(points, null, store.site.home_currency);
+    const points = (trend || []).map(p => ({ label: p.label != null ? p.label : p.period, value: p.total }));
+    trendEl.innerHTML = trendBar(points, null, home);
   }
+  if (trendTitle) trendTitle.textContent = state.filterYear && state.filterYear !== 'all'
+    ? state.filterYear + ' 年每月花费趋势'
+    : '逐年花费趋势';
+
+  const byYear = summary.byYear || [];
   const table = document.getElementById('yearTable');
   if (table) {
-    table.innerHTML = ys.map(y => {
-      const rs = scope.filter(r => r.year === y);
-      const tot = rs.reduce((s, r) => s + toHome(totalOf(r), r.currency), 0);
-      const dy = rs.reduce((s, r) => s + (parseInt(r.days) || 0), 0);
-      return `<div class="detail-row"><span class="k">${y} 年（${rs.length} 次 / ${dy} 天）</span><span class="v">${homeMoney(tot)}</span></div>`;
+    table.innerHTML = byYear.map(y => {
+      return `<div class="detail-row"><span class="k">${esc(y.year)} 年（${y.count} 次 / ${y.days} 天）</span><span class="v">${homeMoney(y.total)}</span></div>`;
     }).join('') || '<div class="empty">暂无数据</div>';
   }
 }

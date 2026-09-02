@@ -5,17 +5,6 @@ export const store = {
   hideSeed: localStorage.getItem('te_hide_seed') === '1'
 };
 
-/* 把金额从 cur 换算到本位币（用公开汇率表，离线可用） */
-export function toHome(amount, cur) {
-  const rates = store.site.fx_rates || { CNY: 1 };
-  const home = store.site.home_currency || 'CNY';
-  const rf = rates[(cur || 'CNY').toUpperCase()];
-  const rt = rates[home.toUpperCase()];
-  const v = parseFloat(amount) || 0;
-  if (!rf || !rt) return v; // 未知币种不换算
-  return v * rf / rt;
-}
-
 export function toast(msg, ms = 2200) {
   let el = document.getElementById('toast');
   if (!el) {
@@ -147,8 +136,9 @@ export function currentRoute() {
   const h = (location.hash || '#/workbench').slice(1);
   return h || '/workbench';
 }
+/* 统一 html 转义（含单引号），charts.js / main.js 等共用此实现，避免各端转义字符集不一致 */
 export function esc(s) {
-  return (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 export function fmt(n) {
   n = Math.round((n || 0) * 100) / 100;
@@ -156,9 +146,15 @@ export function fmt(n) {
 }
 export function addYen(n) { return '¥' + fmt(n); }
 
-/* 币种符号表（常用），JPY 用 JP¥ 区分 CNY 的 ¥；未知币种回退代码本身 */
-const CUR_SYMBOLS = { CNY: '¥', HKD: 'HK$', MOP: 'MOP$', TWD: 'NT$', USD: '$', EUR: '€', GBP: '£', JPY: 'JP¥', KRW: '₩', THB: '฿', SGD: 'S$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', CHF: 'Fr', MYR: 'RM', IDR: 'Rp', PHP: '₱', VND: '₫', INR: '₹', RUB: '₽' };
-export function curSymbol(c) { return CUR_SYMBOLS[(c || 'CNY').toUpperCase()] || (c || 'CNY'); }
+/* 9 类支出分类：前端唯一来源（服务端对应 db.js 的 EXP_KEYS，需保持同步） */
+export const CATS = ['交通', '机票', '高铁', '住宿', '餐饮', '门票', '团费', '购物', '其他'];
+
+/* 币种符号表唯一来源：store.site.currency_symbols（由 /api/public/site 从服务端 fx.CURRENCY_SYMBOLS 下发）。
+ * 删除本地硬编码副本，避免与分享页分叉（如 IDR/PHP/VND/INR/RUB 缺失）。 */
+export function curSymbol(c) {
+  const sym = store.site.currency_symbols;
+  return (sym && sym[(c || 'CNY').toUpperCase()]) || (c || 'CNY');
+}
 export function fmtMoney(n, cur) { return curSymbol(cur) + fmt(n); }
 export function parseStart(dr, year) {
   if (!dr) return null;

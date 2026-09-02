@@ -138,7 +138,8 @@ function seedAdmin() {
     .run(config.SEED_ADMIN.username, null, hash, salt, config.SEED_ADMIN.role, now, now);
 }
 
-/* 首次运行（routes 表为空）时，把 data/routes.json 导入为全员可见示例（is_seed=1） */
+/* 首次运行（routes 表为空）时，把 data/routes.json 导入为全员可见示例（is_seed=1）
+ * 复用 bind()（经 insertRoute）构造参数，避免与 routes_api 导入/更新各写一份字段映射 */
 function seedRoutes() {
   const n = db.prepare('SELECT COUNT(*) AS c FROM routes').get().c;
   if (n > 0) return;
@@ -148,35 +149,9 @@ function seedRoutes() {
   try { arr = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return; }
   if (!Array.isArray(arr) || !arr.length) return;
   const admin = db.prepare('SELECT id FROM users WHERE username = ?').get(config.SEED_ADMIN.username);
-  const now = Date.now();
-  const ins = db.prepare(`INSERT INTO routes (
-      id, owner_id, is_seed, year, name, daterange, type, days, people, dest, scenic, hotel,
-      start_date, end_date, currency, budget_total, budget_daily,
-      exp_traffic, exp_flight, exp_train, exp_hotel, exp_meal, exp_ticket, exp_group, exp_shopping, exp_other,
-      notes, created_at, updated_at)
-    VALUES (@id, @owner_id, 1, @year, @name, @daterange, @type, @days, @people, @dest, @scenic, @hotel,
-      @start_date, @end_date, @currency, @budget_total, @budget_daily,
-      @exp_traffic, @exp_flight, @exp_train, @exp_hotel, @exp_meal, @exp_ticket, @exp_group, @exp_shopping, @exp_other,
-      @notes, @created_at, @updated_at)`);
+  if (!admin) return;
   const tx = db.transaction(() => {
-    for (const r of arr) {
-      const e = r.exp || {};
-      const dr = parseDateRange(r.daterange, r.year);
-      ins.run({
-        id: r.id || uid('r'), owner_id: admin.id,
-        year: r.year || '', name: r.name || '', daterange: r.daterange || '', type: r.type || '自由行',
-        days: parseInt(r.days) || 0, people: parseInt(r.people) || 0,
-        dest: r.dest || '', scenic: r.scenic || '', hotel: r.hotel || '',
-        start_date: r.start_date || dr.start || '',
-        end_date: r.end_date || dr.end || '',
-        currency: (r.currency && String(r.currency).trim()) || 'CNY',
-        budget_total: num(r.budget_total), budget_daily: num(r.budget_daily),
-        exp_traffic: num(e['交通']), exp_flight: num(e['机票']), exp_train: num(e['高铁']),
-        exp_hotel: num(e['住宿']), exp_meal: num(e['餐饮']), exp_ticket: num(e['门票']),
-        exp_group: num(e['团费']), exp_shopping: num(e['购物']), exp_other: num(e['其他']),
-        notes: r.notes || '', created_at: now, updated_at: now
-      });
-    }
+    for (const r of arr) insertRoute(admin.id, r, true);
   });
   tx();
 }
@@ -272,10 +247,19 @@ function findRouteByShareToken(token) {
   return row ? routeToJson(row) : null;
 }
 
+/* 审计日志：auth 与 admin 共用的唯一实现（写入失败不阻塞主流程） */
+function audit(actorId, action, targetType, targetId, detail, ip) {
+  try {
+    db.prepare('INSERT INTO audit_logs (actor_id, action, target_type, target_id, detail, ip, created_at) VALUES (?,?,?,?,?,?,?)')
+      .run(actorId, action, targetType || null, targetId || null, detail || null, ip || null, Date.now());
+  } catch (e) { /* 审计写入失败不阻塞主流程 */ }
+}
+
 module.exports = {
   initDb, get db() { return db; },
   EXP_KEYS, EXP_COL, num, scryptHash, uid,
   ROUTE_COLS,
   routeToJson, insertRoute, updateRoute, getRoute,
-  getShareToken, setShareToken, clearShareToken, findRouteByShareToken
+  getShareToken, setShareToken, clearShareToken, findRouteByShareToken,
+  audit
 };

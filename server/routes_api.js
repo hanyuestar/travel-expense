@@ -2,7 +2,7 @@
  * 鉴权：requireAuth 之后调用；req.user 已注入 */
 'use strict';
 const crypto = require('crypto');
-const { fail, ok, created } = require('./http');
+const { fail, ok, created, escapeLike } = require('./http');
 const dbModule = require('./db');
 const { authFromReq } = require('./auth');
 const { toCsv } = require('./csv');
@@ -22,11 +22,6 @@ const ROUTE_COLS = dbModule.ROUTE_COLS;
 /* 个人导出 CSV 列头（与导入字段对应，可往返） */
 const CSV_HEAD = ['name', 'year', 'type', 'daterange', 'start_date', 'end_date', 'days', 'people', 'dest',
   'currency', 'budget_total', 'budget_daily'].concat(dbModule.EXP_KEYS, ['scenic', 'hotel', 'notes']);
-
-/* 转义 LIKE 通配符 % 和 _，防止用户输入被当作通配符 */
-function escapeLike(s) {
-  return String(s).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-}
 
 /* 查询本人+种子（含个人隐藏开关过滤种子）；返回全量行（统计用） */
 function queryRoutes(userId, { year, q, hideSeed }) {
@@ -255,8 +250,28 @@ function statsSummary(res, user, query) {
 
 function statsTrend(res, user, query) {
   const hideSeed = query.hideSeed === '1';
+  const year = query.year || '';
   const home = homeCurrency();
-  const rows = queryRoutes(user.id, { hideSeed });
+  const rows = queryRoutes(user.id, { year, hideSeed });
+  // 筛选全部年份 → 按年聚合，呈现年消费趋势（标签为具体年份，如 2024）
+  if (!year) {
+    const byYear = {};
+    for (const r of rows) {
+      let key = null;
+      if (r.start_date) key = r.start_date.slice(0, 4);
+      else { const d = parseDate(r.daterange, r.year); if (d) key = String(d.year); }
+      if (!key) key = String(r.year || '未标注');
+      const t = dbModule.routeToJson(r).exp;
+      const cur = r.currency || 'CNY';
+      let sum = 0;
+      for (const c of CATS) sum += fx.convert(dbModule.num(t[c]), cur, home).value;
+      if (!byYear[key]) byYear[key] = { period: key, label: key, total: 0 };
+      byYear[key].total += sum;
+    }
+    const years = Object.keys(byYear).sort();
+    return ok(res, years.map(y => byYear[y]));
+  }
+  // 筛选具体年份 → 按该年月份聚合，呈现月消费趋势（标签为 MM月）
   const byMonth = {};
   for (const r of rows) {
     let key = null;
@@ -267,7 +282,7 @@ function statsTrend(res, user, query) {
     const cur = r.currency || 'CNY';
     let sum = 0;
     for (const c of CATS) sum += fx.convert(dbModule.num(t[c]), cur, home).value;
-    if (!byMonth[key]) byMonth[key] = { month: key, total: 0 };
+    if (!byMonth[key]) byMonth[key] = { period: key, label: key.slice(5) + '月', total: 0 };
     byMonth[key].total += sum;
   }
   const months = Object.keys(byMonth).sort();

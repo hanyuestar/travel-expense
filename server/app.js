@@ -137,7 +137,7 @@ const server = http.createServer(async (req, res) => {
 
   /* 公开站点信息（无需登录） */
   if (url.pathname === '/api/public/site') {
-    const s = db.prepare('SELECT * FROM site_settings WHERE id = 1').get() || {};
+    const s = readSiteSettings();
     accessLog(req, res, startMs, 200);
     return send(res, 200, {
       ok: true,
@@ -147,7 +147,9 @@ const server = http.createServer(async (req, res) => {
         register_mode: s.register_mode || 'all',
         announce_text: s.announce_text || '',
         home_currency: s.home_currency || 'CNY',
-        fx_rates: fx.ratesToCny
+        fx_rates: fx.ratesToCny,
+        /* 币种符号表的唯一来源（fx.CURRENCY_SYMBOLS），前端复用避免与分享页分叉 */
+        currency_symbols: fx.CURRENCY_SYMBOLS
       }
     });
   }
@@ -155,7 +157,7 @@ const server = http.createServer(async (req, res) => {
   /* 客户端探测：独立客户端（安卓 APP / 切换服务器）调用，确认该地址是 travel-expense 服务。
    * 返回结构与 /api/public/site 一致：data 内包业务字段。 */
   if (url.pathname === '/api/public/server-check') {
-    const s = db.prepare('SELECT * FROM site_settings WHERE id = 1').get() || {};
+    const s = readSiteSettings();
     accessLog(req, res, startMs, 200);
     return send(res, 200, {
       ok: true,
@@ -261,13 +263,18 @@ function esc(s) {
 /* JPY 用 JP¥ 区分 CNY 的 ¥；日元无小数 */
 const JPY_ZERO_DECIMAL = new Set(['JPY', 'KRW']);
 function money(n, cur) {
-  const SYM = { CNY: '¥', HKD: 'HK$', MOP: 'MOP$', TWD: 'NT$', USD: '$', EUR: '€', GBP: '£', JPY: 'JP¥', KRW: '₩', THB: '฿', SGD: 'S$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', CHF: 'Fr', MYR: 'RM' };
+  /* 符号表直接复用 fx.CURRENCY_SYMBOLS（前端经 /api/public/site 下发同一份），删除本地私有副本 */
   const curUp = (cur || 'CNY').toUpperCase();
-  const s = SYM[curUp] || (cur || 'CNY');
+  const s = fx.CURRENCY_SYMBOLS[curUp] || (cur || 'CNY');
   const v = parseFloat(n);
   const fracDigits = JPY_ZERO_DECIMAL.has(curUp) ? 0 : 2;
   const num = isFinite(v) ? v.toLocaleString('zh-CN', { maximumFractionDigits: fracDigits, minimumFractionDigits: 0 }) : '0';
   return s + num;
+}
+
+/* 站点设置读取（/api/public/site 与 /api/public/server-check 共用，避免重复查询） */
+function readSiteSettings() {
+  return db.prepare('SELECT * FROM site_settings WHERE id = 1').get() || {};
 }
 function renderSharePage(r) {
   const rows = [];

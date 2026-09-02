@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
-const { fail, ok } = require('./http');
+const { fail, ok, escapeLike } = require('./http');
 const { authFromReq, publicUser } = require('./auth');
 const mailer = require('./mailer');
 const dbModule = require('./db');
@@ -14,10 +14,7 @@ const db = () => dbModule.db;
 
 const ONLINE_MS = config.ONLINE_WINDOW_MS;
 
-function audit(actorId, action, targetType, targetId, detail, ip) {
-  db().prepare('INSERT INTO audit_logs (actor_id, action, target_type, target_id, detail, ip, created_at) VALUES (?,?,?,?,?,?,?)')
-    .run(actorId, action, targetType || null, targetId || null, detail || null, ip || null, Date.now());
-}
+/* 审计日志统一调用 db.audit（与 auth.js 共用单一实现，且写入失败不阻塞主流程） */
 
 function userRow(u) {
   const online = !!db().prepare(
@@ -65,7 +62,7 @@ async function handle(req, res, url, body) {
     let where = '1=1', args = [];
     if (q) {
       where += ' AND (username LIKE ? ESCAPE \'\\\' OR email LIKE ? ESCAPE \'\\\')';
-      const like = `%${q.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
+      const like = `%${escapeLike(q)}%`;
       args.push(like, like);
     }
     if (status) { where += ' AND status = ?'; args.push(status); }
@@ -96,12 +93,12 @@ async function handle(req, res, url, body) {
       db().prepare('UPDATE users SET status = ?, updated_at = ? WHERE id = ?').run('banned', Date.now(), targetId);
       db().prepare('DELETE FROM sessions WHERE user_id = ?').run(targetId); // 即时掉线
       db().prepare('UPDATE routes SET share_token = NULL WHERE owner_id = ?').run(targetId); // 作废旧分享链接
-      audit(admin.id, 'ban_user', 'user', String(targetId), `封禁用户 ${target.username || target.email}`, ip);
+      dbModule.audit(admin.id, 'ban_user', 'user', String(targetId), `封禁用户 ${target.username || target.email}`, ip);
       return ok(res, true);
     }
     if (action === 'unban') {
       db().prepare('UPDATE users SET status = ?, updated_at = ? WHERE id = ?').run('active', Date.now(), targetId);
-      audit(admin.id, 'unban_user', 'user', String(targetId), `解封用户 ${target.username || target.email}`, ip);
+      dbModule.audit(admin.id, 'unban_user', 'user', String(targetId), `解封用户 ${target.username || target.email}`, ip);
       return ok(res, true);
     }
     if (action === 'role') {
@@ -111,7 +108,7 @@ async function handle(req, res, url, body) {
         if (adminCount <= 1) return fail(res, 400, '不能降级唯一管理员');
       }
       db().prepare('UPDATE users SET role = ?, updated_at = ? WHERE id = ?').run(newRole, Date.now(), targetId);
-      audit(admin.id, 'role_change', 'user', String(targetId),
+      dbModule.audit(admin.id, 'role_change', 'user', String(targetId),
         `角色变更：${target.username || target.email} → ${newRole}`, ip);
       return ok(res, true);
     }
@@ -136,7 +133,7 @@ async function handle(req, res, url, body) {
       .run(String(b.smtp_host || ''), parseInt(b.smtp_port) || 465, b.smtp_secure ? 1 : 0,
         String(b.smtp_user || ''), pass, String(b.from_name || ''), String(b.from_address || ''),
         b.enabled ? 1 : 0, Date.now(), admin.id);
-    audit(admin.id, 'update_mail_config', 'email_config', '1', '更新邮件服务器配置', ip);
+    dbModule.audit(admin.id, 'update_mail_config', 'email_config', '1', '更新邮件服务器配置', ip);
     return ok(res, true);
   }
   if (rest === '/email-config/test' && method === 'POST') {
@@ -147,7 +144,7 @@ async function handle(req, res, url, body) {
         subject: '旅行经费工作台 — 测试邮件',
         text: '这是一封测试邮件，说明 SMTP 配置可用。'
       });
-      audit(admin.id, 'test_mail', 'email_config', '1', '发送测试邮件成功', ip);
+      dbModule.audit(admin.id, 'test_mail', 'email_config', '1', '发送测试邮件成功', ip);
       return ok(res, true);
     } catch (e) {
       return fail(res, 400, '测试邮件发送失败：' + e.message);
@@ -172,7 +169,7 @@ async function handle(req, res, url, body) {
       .run(String(b.site_name || '旅行经费工作台'), b.allow_register ? 1 : 0,
         ['all', 'email_only', 'username_only'].includes(b.register_mode) ? b.register_mode : 'all',
         String(b.announce_text || ''), home, Date.now(), admin.id);
-    audit(admin.id, 'update_site_settings', 'site_settings', '1', '更新站点设置', ip);
+    dbModule.audit(admin.id, 'update_site_settings', 'site_settings', '1', '更新站点设置', ip);
     return ok(res, true);
   }
 
@@ -187,7 +184,7 @@ async function handle(req, res, url, body) {
       if (h === 'owner_id') return r.owner_id;
       return r[h] == null ? '' : r[h];
     }));
-    audit(admin.id, 'export_routes', 'routes', null, '全站导出 CSV（' + rows.length + ' 条）', ip);
+    dbModule.audit(admin.id, 'export_routes', 'routes', null, '全站导出 CSV（' + rows.length + ' 条）', ip);
     res.writeHead(200, {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': 'attachment; filename="all-routes.csv"'
@@ -203,7 +200,7 @@ async function handle(req, res, url, body) {
     const d = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     const stamp = d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
-    audit(admin.id, 'db_backup', 'db', null, '下载数据库备份', ip);
+    dbModule.audit(admin.id, 'db_backup', 'db', null, '下载数据库备份', ip);
     const data = fs.readFileSync(dbPath);
     res.writeHead(200, {
       'Content-Type': 'application/octet-stream',

@@ -46,4 +46,9 @@ function parseUrl(raw) {
   return { pathname: u.pathname, query };
 }
 
-module.exports = { send, ok, created, fail, readBody, parseCookies, parseUrl };
+/* 转义 LIKE 通配符 % 和 _（防止用户输入被当作通配符），用户/路线搜索共用单一实现 */
+function escapeLike(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
+module.exports = { send, ok, created, fail, readBody, parseCookies, parseUrl, escapeLike };

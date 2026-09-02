@@ -1,10 +1,8 @@
 /* main.js — 入口：hash 路由 + 守卫 + 全局事件（ES Module） */
-import { store, toast, api, navigate, fetchMe, applyAuth, renderHeader, getServerUrl, setServerUrl, HAS_BUILTIN_SERVER } from './api.js';
+import { store, toast, api, navigate, fetchMe, applyAuth, renderHeader, getServerUrl, setServerUrl, HAS_BUILTIN_SERVER, esc } from './api.js';
 import { initAuth, renderLogin, renderRegister } from './auth.js';
 import { loadRoutes, renderWorkbench, renderStats, renderProfile, bindFormEvents } from './app.js';
 import { renderAdmin, bindAdminEvents } from './admin.js';
-
-const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 async function guard() {
   const route = location.hash || '#/workbench';

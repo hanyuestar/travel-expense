@@ -12,6 +12,13 @@ const STATIC_RATES_TO_CNY = {
   CHF: 8.0, MYR: 1.6, IDR: 0.00045, PHP: 0.125, VND: 0.00028, INR: 0.086, RUB: 0.075
 };
 
+/* 币种符号表：服务端分享页 + 前端经 /api/public/site 下发的唯一来源（删除各端私有副本，避免分叉） */
+const CURRENCY_SYMBOLS = {
+  CNY: '¥', HKD: 'HK$', MOP: 'MOP$', TWD: 'NT$', USD: '$', EUR: '€', GBP: '£',
+  JPY: 'JP¥', KRW: '₩', THB: '฿', SGD: 'S$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$',
+  CHF: 'Fr', MYR: 'RM', IDR: 'Rp', PHP: '₱', VND: '₫', INR: '₹', RUB: '₽'
+};
+
 let ratesToCny = Object.assign({}, STATIC_RATES_TO_CNY);
 let cacheAt = 0;
 const CACHE_TTL_MS = 6 * 3600 * 1000;
@@ -67,4 +74,4 @@ function refreshFromApi(apiUrl, timeoutMs) {
   });
 }
 
-module.exports = { convert, known, refreshFromApi, STATIC_RATES_TO_CNY, get ratesToCny() { return ratesToCny; } };
+module.exports = { convert, known, refreshFromApi, STATIC_RATES_TO_CNY, CURRENCY_SYMBOLS, get ratesToCny() { return ratesToCny; } };

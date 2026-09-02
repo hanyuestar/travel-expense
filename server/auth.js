@@ -10,13 +10,11 @@ const dbModule = require('./db');
 const db = () => dbModule.db;
 
 /* ---------- 密码 ---------- */
-function hashPassword(password, salt) {
-  return crypto.scryptSync(String(password), salt, 64).toString('hex');
-}
+/* 哈希统一使用 db.scryptHash（单一实现，避免与 db.js 重复） */
 function verifyPassword(password, salt, hash) {
   if (!salt || !hash) return false;
   const h = Buffer.from(hash, 'hex');
-  const t = Buffer.from(hashPassword(password, salt), 'hex');
+  const t = Buffer.from(dbModule.scryptHash(password, salt), 'hex');
   return h.length === t.length && crypto.timingSafeEqual(h, t);
 }
 
@@ -125,12 +123,7 @@ function consumeCode(email, purpose, code) {
 }
 
 /* ---------- 审计日志（auth 内部用） ---------- */
-function auditAuth(actorId, action, targetType, targetId, detail, ip) {
-  try {
-    db().prepare('INSERT INTO audit_logs (actor_id, action, target_type, target_id, detail, ip, created_at) VALUES (?,?,?,?,?,?,?)')
-      .run(actorId, action, targetType || null, targetId || null, detail || null, ip || null, Date.now());
-  } catch (e) { /* 审计写入失败不阻塞主流程 */ }
-}
+/* 统一调用 db.audit（与 admin_api 共用单一实现，且写入失败不阻塞主流程） */
 
 /* ---------- 路由 ---------- */
 async function handle(req, res, url, body) {
@@ -219,7 +212,7 @@ async function handle(req, res, url, body) {
 
       const now = Date.now();
       const salt = crypto.randomBytes(16).toString('hex');
-      const hash = hashPassword(password, salt);
+      const hash = dbModule.scryptHash(password, salt);
       let userId;
       try {
         const info = db().prepare(
@@ -274,7 +267,7 @@ async function handle(req, res, url, body) {
       const sid = createSession(user.id, ip, req.headers['user-agent']);
       setCookie(res, sid, config.SESSION_TTL_MS);
       if (user.role === 'admin') {
-        auditAuth(user.id, 'admin_login', 'user', String(user.id), user.username, ip);
+        dbModule.audit(user.id, 'admin_login', 'user', String(user.id), user.username, ip);
       }
       return ok(res, publicUser(user));
     }
@@ -284,7 +277,7 @@ async function handle(req, res, url, body) {
       const u = authFromReq(req);
       const sid = parseCookies(req).sid;
       if (u && u.role === 'admin') {
-        auditAuth(u.id, 'admin_logout', 'user', String(u.id), u.username, req.socket.remoteAddress || '');
+        dbModule.audit(u.id, 'admin_logout', 'user', String(u.id), u.username, req.socket.remoteAddress || '');
       }
       deleteSession(sid);
       clearCookie(res);
@@ -310,7 +303,7 @@ async function handle(req, res, url, body) {
         return fail(res, 400, '原密码不正确');
       }
       const salt = crypto.randomBytes(16).toString('hex');
-      const hash = hashPassword(newPassword, salt);
+      const hash = dbModule.scryptHash(newPassword, salt);
       db().prepare('UPDATE users SET password_hash = ?, password_salt = ?, force_reset = 0, updated_at = ? WHERE id = ?')
         .run(hash, salt, Date.now(), u.id);
       return ok(res, true);
@@ -321,4 +314,4 @@ async function handle(req, res, url, body) {
   }
 }
 
-module.exports = { handle, authFromReq, publicUser, hashPassword, verifyPassword, createSession, deleteSession, clearCookie };
+module.exports = { handle, authFromReq, publicUser, verifyPassword, createSession, deleteSession, clearCookie };
