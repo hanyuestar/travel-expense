@@ -263,7 +263,8 @@ function statsTrend(res, user, query) {
       let key = null;
       if (r.start_date) key = r.start_date.slice(0, 4);
       else { const d = parseDate(r.daterange, r.year); if (d) key = String(d.year); }
-      if (!key) key = String(r.year || '未标注');
+      /* 趋势图按时间轴聚合，无法定位年份的路线（空 year 且无法解析日期）不属于时间序列，跳过 */
+      if (!key) continue;
       const t = dbModule.routeToJson(r).exp;
       const cur = r.currency || 'CNY';
       let sum = 0;

@@ -49,6 +49,9 @@ async function main() {
   check('种子路线已导入且管理员可见（§2.3）', r.status === 200 && r.json.data.list.length >= 4, r);
   const seedIds = (r.json.data.list || []).filter(x => x.is_seed).map(x => x.id);
   check('种子路线 is_seed=1 全员可见', seedIds.length >= 4, seedIds);
+  // 隐藏系统示例：种子路线归 admin 所有，原过滤仅排除非本人路线 → 管理员藏不掉（验收 bug）
+  r = await req('GET', '/api/routes?hideSeed=1', null, adminCookie);
+  check('隐藏系统示例：管理员 hideSeed=1 后示例路线被排除（回归）', r.status === 200 && r.json.data.list.length === 0, r);
 
   /* ================= mailer.js + auth.js（§3/§4.2） ================= */
   section('T4 mailer.js — 邮件未配置时发码');
@@ -232,6 +235,15 @@ async function main() {
   check('stats/summary 返回汇总（§4.3）', r.status === 200 && typeof r.json.data.grand === 'number' && r.json.data.byYear && r.json.data.totalByCat, r);
   r = await req('GET', '/api/routes/stats/trend', null, userCookie);
   check('stats/trend 返回月度序列（§4.3）', r.status === 200 && Array.isArray(r.json.data), r);
+  // 趋势图粒度回归（验收 bug）：全部→按年聚合（period 为 4 位年份），具体年份→按月聚合（period 为 YYYY-MM）
+  const trendAll = (r.json && r.json.data) || [];
+  check('stats/trend 全部：按年聚合（period 为 YYYY，无月份）', r.status === 200 && trendAll.length > 0 && trendAll.every(p => /^\d{4}$/.test(p.period)), r);
+  if (trendAll.length > 0) {
+    const yr = trendAll[0].period;
+    r = await req('GET', '/api/routes/stats/trend?year=' + yr, null, userCookie);
+    const trendYr = (r.json && r.json.data) || [];
+    check('stats/trend year=' + yr + '：响应年份筛选且按月聚合（period 为 YYYY-MM）', r.status === 200 && trendYr.length > 0 && trendYr.every(p => new RegExp('^' + yr + '-\\d{2}$').test(p.period)), r);
+  }
 
   // 清空保留种子
   r = await req('POST', '/api/routes', { name: '临时路线', year: '2026', exp: { 交通: 10 } }, userCookie);
