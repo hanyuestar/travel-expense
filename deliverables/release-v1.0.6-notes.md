@@ -1,4 +1,4 @@
-# 旅行经费工作台 v1.0.5
+# 旅行经费工作台 v1.0.6
 
 ## 这次更新了什么
 
@@ -13,8 +13,8 @@
 
 镜像已发布到两个仓库，均包含 amd64 与 arm64 两种架构：
 
-- GitHub Container Registry：`ghcr.io/hanyuestar/travel-expense:v1.0.5`（同时带 `latest` 标签）
-- Docker Hub：`kyson666/travel-expense:v1.0.5`（同时带 `latest` 标签）
+- GitHub Container Registry：`ghcr.io/hanyuestar/travel-expense:v1.0.6`（同时带 `latest` 标签）
+- Docker Hub：`kyson666/travel-expense:v1.0.6`（同时带 `latest` 标签）
 
 ## 验证情况
 
