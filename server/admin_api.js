@@ -1,4 +1,4 @@
-/* 管理后台 API：总览/用户管理/封禁提权/邮件配置/站点设置/审计日志
+/* 管理后台 API：总览/用户管理/封禁提权/邮件配置/站点设置/AI配置/审计日志
  * 全部需 requireAdmin（由 app.js 先校验 req.user.role） */
 'use strict';
 const fs = require('fs');
@@ -8,6 +8,7 @@ const { fail, ok, escapeLike } = require('./http');
 const { authFromReq, publicUser } = require('./auth');
 const mailer = require('./mailer');
 const dbModule = require('./db');
+const aiService = require('./ai_service');
 const { toCsv } = require('./csv');
 
 const db = () => dbModule.db;
@@ -171,6 +172,89 @@ async function handle(req, res, url, body) {
         String(b.announce_text || ''), home, Date.now(), admin.id);
     dbModule.audit(admin.id, 'update_site_settings', 'site_settings', '1', '更新站点设置', ip);
     return ok(res, true);
+  }
+
+  /* ---------- AI 配置 ---------- */
+  if (rest === '/ai-config' && method === 'GET') {
+    const c = dbModule.getAiConfig();
+    const enabledUserIds = dbModule.getAiEnabledUserIds();
+    /* 返回已启用用户的简要信息（id+用户名+邮箱），方便前端回显 */
+    const enabledUsers = enabledUserIds.length > 0
+      ? db().prepare(`SELECT id, username, email FROM users WHERE id IN (${enabledUserIds.map(() => '?').join(',')})`)
+          .all(...enabledUserIds)
+      : [];
+    return ok(res, {
+      api_base_url: c.api_base_url,
+      api_key: c.api_key ? '******' : '',
+      model_id: c.model_id,
+      enabled: c.enabled,
+      enabled_users: enabledUsers.map(u => ({ id: u.id, username: u.username || '', email: u.email || '' }))
+    });
+  }
+  if (rest === '/ai-config' && method === 'PUT') {
+    const b = body || {};
+    dbModule.saveAiConfig({
+      api_base_url: b.api_base_url,
+      api_key: b.api_key,
+      model_id: b.model_id,
+      enabled: !!b.enabled
+    }, admin.id);
+    dbModule.audit(admin.id, 'update_ai_config', 'ai_config', '1', '更新 AI 模型配置', ip);
+    return ok(res, true);
+  }
+  if (rest === '/ai-config/test' && method === 'POST') {
+    try {
+      /* 测试时使用请求体中的配置（允许未保存先测试），若未传则用已保存配置 */
+      const b = body || {};
+      let cfg;
+      if (b.api_base_url || b.api_key || b.model_id) {
+        cfg = {
+          api_base_url: String(b.api_base_url || ''),
+          api_key: String(b.api_key || ''),
+          model_id: String(b.model_id || '')
+        };
+      } else {
+        cfg = dbModule.getAiConfig();
+      }
+      if (!cfg.api_base_url || !cfg.api_key || !cfg.model_id) {
+        return fail(res, 400, '请先填写 API 地址、密钥和模型 ID');
+      }
+      const result = await aiService.testConnection(cfg);
+      dbModule.audit(admin.id, 'test_ai_config', 'ai_config', '1', 'AI 配置测试成功', ip);
+      return ok(res, { ok: true, reply: result.reply });
+    } catch (e) {
+      return fail(res, 400, 'AI 接口测试失败：' + e.message);
+    }
+  }
+  /* AI 启用用户：获取全部可选用户（含是否已启用标记） */
+  if (rest === '/ai-config/users' && method === 'GET') {
+    const enabledIds = new Set(dbModule.getAiEnabledUserIds());
+    const users = db().prepare('SELECT id, username, email, role, status FROM users ORDER BY id ASC').all();
+    return ok(res, {
+      list: users.map(u => ({
+        id: u.id,
+        username: u.username || '',
+        email: u.email || '',
+        role: u.role,
+        status: u.status,
+        ai_enabled: enabledIds.has(u.id)
+      }))
+    });
+  }
+  /* AI 启用用户：更新启用列表（传入 user_ids 数组） */
+  if (rest === '/ai-config/users' && method === 'PUT') {
+    const b = body || {};
+    const userIds = Array.isArray(b.user_ids) ? b.user_ids : [];
+    /* 校验所有用户ID都存在 */
+    if (userIds.length > 0) {
+      const placeholders = userIds.map(() => '?').join(',');
+      const found = db().prepare(`SELECT COUNT(*) AS c FROM users WHERE id IN (${placeholders})`).get(...userIds).c;
+      if (found !== userIds.length) return fail(res, 400, '包含不存在的用户 ID');
+    }
+    dbModule.setAiEnabledUsers(userIds, admin.id);
+    dbModule.audit(admin.id, 'update_ai_enabled_users', 'ai_enabled_users', null,
+      `更新 AI 启用用户列表（${userIds.length} 人）`, ip);
+    return ok(res, { count: userIds.length });
   }
 
   /* ---------- 全站数据导出（CSV，含归属用户名；审计留痕） ---------- */

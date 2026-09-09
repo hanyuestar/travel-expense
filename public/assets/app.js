@@ -310,6 +310,57 @@ export async function renderStats() {
   }
 }
 
+/* ---------- 日期工具 ---------- */
+/* 由起止日期计算天数：结束日期 - 开始日期 + 1 */
+function calcDays(start, end) {
+  if (!start || !end) return 0;
+  const s = new Date(start + 'T00:00:00');
+  const e = new Date(end + 'T00:00:00');
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
+  const diff = Math.round((e - s) / 86400000);
+  return diff >= 0 ? diff + 1 : 0;
+}
+/* 由起止日期生成显示用 daterange 文本（如 2026/06/17 - 2026/06/24） */
+function buildDateRangeText(start, end) {
+  if (!start && !end) return '';
+  const fmt = (s) => {
+    if (!s) return '';
+    const [y, m, d] = s.split('-');
+    return y && m && d ? `${y}/${m}/${d}` : s;
+  };
+  if (start && end && start !== end) return `${fmt(start)} - ${fmt(end)}`;
+  return fmt(start || end);
+}
+/* 从旧的 daterange 文本解析出起止日期（兼容老数据） */
+function parseDatesFromRange(dr, year) {
+  if (!dr) return { start: '', end: '' };
+  let m = dr.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})\s*[-—~]\s*(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (m) return {
+    start: `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`,
+    end: `${m[4]}-${String(m[5]).padStart(2,'0')}-${String(m[6]).padStart(2,'0')}`
+  };
+  m = dr.match(/(\d{1,2})[\/\-.](\d{1,2})\s*[-—~]\s*(\d{1,2})[\/\-.](\d{1,2})/);
+  if (m && year) {
+    const sm = +m[1], em = +m[3];
+    const ey = em < sm ? +year + 1 : +year;
+    return {
+      start: `${year}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`,
+      end: `${ey}-${String(m[3]).padStart(2,'0')}-${String(m[4]).padStart(2,'0')}`
+    };
+  }
+  m = dr.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (m) {
+    const d = `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+    return { start: d, end: d };
+  }
+  m = dr.match(/(\d{1,2})[\/\-.](\d{1,2})/);
+  if (m && year) {
+    const d = `${year}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
+    return { start: d, end: d };
+  }
+  return { start: '', end: '' };
+}
+
 /* ---------- 表单 ---------- */
 function buildExpInputs() {
   const box = document.getElementById('expInputs');
@@ -317,6 +368,15 @@ function buildExpInputs() {
   box.innerHTML = CATS.map(c =>
     `<div class="exp-cell"><div class="el"><span class="sw" style="background:${COLORS[c]}"></span>${c}</div>
      <input type="number" min="0" step="0.01" id="exp_${c}" placeholder="0"></div>`).join('');
+}
+
+/* 日期变化时自动计算天数并更新 daterange 隐藏字段 */
+function onDateChange() {
+  const start = document.getElementById('f_start_date').value;
+  const end = document.getElementById('f_end_date').value;
+  const days = calcDays(start, end);
+  document.getElementById('f_days').value = days > 0 ? days : '';
+  document.getElementById('f_daterange').value = buildDateRangeText(start, end);
 }
 
 export function openForm(id) {
@@ -328,9 +388,27 @@ export function openForm(id) {
   document.getElementById('formTitle').textContent = id ? '编辑路线' : '新增路线';
   document.getElementById('f_name').value = r ? r.name : '';
   document.getElementById('f_year').value = r ? r.year : String(new Date().getFullYear());
-  document.getElementById('f_daterange').value = r ? r.daterange : '';
+
+  /* 起止日期：优先用结构化字段，否则从旧 daterange 文本解析 */
+  let startDate = '', endDate = '';
+  if (r) {
+    if (r.start_date) startDate = r.start_date;
+    if (r.end_date) endDate = r.end_date;
+    if (!startDate && !endDate && r.daterange) {
+      const parsed = parseDatesFromRange(r.daterange, r.year);
+      startDate = parsed.start;
+      endDate = parsed.end;
+    }
+  }
+  document.getElementById('f_start_date').value = startDate;
+  document.getElementById('f_end_date').value = endDate;
+  document.getElementById('f_daterange').value = buildDateRangeText(startDate, endDate);
+
   document.getElementById('f_type').value = r ? (r.type || '自由行') : '自由行';
-  document.getElementById('f_days').value = r ? r.days : '';
+  /* 天数：优先用已存值，否则由起止日期自动计算 */
+  const autoDays = calcDays(startDate, endDate);
+  document.getElementById('f_days').value = r && r.days ? r.days : (autoDays > 0 ? autoDays : '');
+
   document.getElementById('f_people').value = r ? r.people : '2';
   const curSel = document.getElementById('f_currency');
   if (curSel) {
@@ -345,6 +423,49 @@ export function openForm(id) {
   document.getElementById('f_hotel').value = r ? (r.hotel || '') : '';
   document.getElementById('f_notes').value = r ? (r.notes || '') : '';
   CATS.forEach(c => { document.getElementById('exp_' + c).value = r && r.exp && r.exp[c] != null ? r.exp[c] : ''; });
+
+  /* AI 按钮：仅当当前用户被启用 AI 功能时显示 */
+  const aiBtn = document.getElementById('aiPlanBtn');
+  if (aiBtn) {
+    aiBtn.style.display = (store.user && store.user.ai_enabled) ? 'inline-flex' : 'none';
+  }
+}
+
+/* AI 行程规划：校验必填项 → 调用接口 → 回填景点路线 */
+async function aiPlanRoute() {
+  const startDate = document.getElementById('f_start_date').value;
+  const endDate = document.getElementById('f_end_date').value;
+  const dest = document.getElementById('f_dest').value.trim();
+  const days = parseInt(document.getElementById('f_days').value) || 0;
+
+  if (!startDate) { toast('请先选择出行开始日期'); return; }
+  if (!endDate) { toast('请先选择出行结束日期'); return; }
+  if (!dest) { toast('请先填写主要目的地'); return; }
+  if (days <= 0) { toast('天数无效，请检查起止日期'); return; }
+
+  const btn = document.getElementById('aiPlanBtn');
+  const originalHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span style="vertical-align:middle">规划中…</span>';
+  try {
+    const res = await api.post('/routes/ai-plan', {
+      start_date: startDate,
+      end_date: endDate,
+      dest,
+      days
+    });
+    if (res && res.scenic) {
+      document.getElementById('f_scenic').value = res.scenic;
+      toast('AI 行程规划完成，已回填到景点路线');
+    } else {
+      toast('AI 返回内容为空');
+    }
+  } catch (e) {
+    toast(e.message || 'AI 规划失败');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHTML;
+  }
 }
 
 async function saveForm() {
@@ -352,11 +473,16 @@ async function saveForm() {
   if (!name) { toast('请填写路线名称'); return; }
   const exp = {};
   CATS.forEach(c => (exp[c] = parseFloat(document.getElementById('exp_' + c).value) || 0));
+  const startDate = document.getElementById('f_start_date').value;
+  const endDate = document.getElementById('f_end_date').value;
+  const days = calcDays(startDate, endDate);
   const obj = {
     name, year: document.getElementById('f_year').value.trim(),
-    daterange: document.getElementById('f_daterange').value.trim(),
+    daterange: document.getElementById('f_daterange').value || buildDateRangeText(startDate, endDate),
+    start_date: startDate,
+    end_date: endDate,
     type: document.getElementById('f_type').value,
-    days: parseInt(document.getElementById('f_days').value) || 0,
+    days: days > 0 ? days : (parseInt(document.getElementById('f_days').value) || 0),
     people: parseInt(document.getElementById('f_people').value) || 0,
     currency: document.getElementById('f_currency').value || 'CNY',
     budget_total: parseFloat(document.getElementById('f_budget_total').value) || 0,
@@ -495,4 +621,10 @@ export function bindFormEvents() {
   document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => closeMask(b.dataset.close));
   document.querySelectorAll('.mask').forEach(m => m.onclick = e => { if (e.target === m) closeMask(m.id); });
   buildExpInputs();
+  /* 日期变化自动计算天数 */
+  document.getElementById('f_start_date').addEventListener('change', onDateChange);
+  document.getElementById('f_end_date').addEventListener('change', onDateChange);
+  /* AI 规划按钮 */
+  const aiBtn = document.getElementById('aiPlanBtn');
+  if (aiBtn) aiBtn.onclick = aiPlanRoute;
 }

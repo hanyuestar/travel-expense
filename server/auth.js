@@ -25,11 +25,12 @@ function genCode() {
 }
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function publicUser(u) {
+function publicUser(u, aiEnabled) {
   return {
     id: u.id, username: u.username, email: u.email, role: u.role,
     status: u.status, email_verified: !!u.email_verified,
-    force_reset: !!u.force_reset, created_at: u.created_at
+    force_reset: !!u.force_reset, created_at: u.created_at,
+    ai_enabled: !!aiEnabled
   };
 }
 
@@ -229,7 +230,7 @@ async function handle(req, res, url, body) {
       const sid = createSession(userId, req.socket.remoteAddress, req.headers['user-agent']);
       setCookie(res, sid, config.SESSION_TTL_MS);
       const u = db().prepare('SELECT * FROM users WHERE id = ?').get(userId);
-      return created(res, publicUser(u));
+      return created(res, publicUser(u, false));
     }
 
     /* 登录：{login, password?|code?} */
@@ -269,7 +270,7 @@ async function handle(req, res, url, body) {
       if (user.role === 'admin') {
         dbModule.audit(user.id, 'admin_login', 'user', String(user.id), user.username, ip);
       }
-      return ok(res, publicUser(user));
+      return ok(res, publicUser(user, dbModule.isAiEnabledUser(user.id)));
     }
 
     /* 登出 */
@@ -288,7 +289,7 @@ async function handle(req, res, url, body) {
     case 'me': {
       const u = authFromReq(req);
       if (!u) return fail(res, 401, '请先登录', { code: 'UNAUTHORIZED' });
-      return ok(res, publicUser(u));
+      return ok(res, publicUser(u, dbModule.isAiEnabledUser(u.id)));
     }
 
     /* 改密 */

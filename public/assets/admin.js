@@ -1,9 +1,10 @@
-/* admin.js — 管理后台（总览/用户/邮件/站点/审计） */
+/* admin.js — 管理后台（总览/用户/邮件/站点/AI配置/审计） */
 import { store, toast, api, esc, fmt, fmtTime } from './api.js';
 
 const NAV = [
   ['overview', '平台总览', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>'],
   ['users', '用户管理', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>'],
+  ['ai', 'AI 配置', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v1a3 3 0 0 1-3 3h-1v1a4 4 0 0 1-8 0v-1H7a3 3 0 0 1-3-3v-1a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4z"/><circle cx="9" cy="11" r="1"/><circle cx="15" cy="11" r="1"/></svg>'],
   ['email', '邮件配置', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>'],
   ['site', '站点设置', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'],
   ['audit', '审计日志', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>']
@@ -41,6 +42,7 @@ function loadAdminPage(seg) {
   if (!box) return;
   if (seg === 'overview') renderOverview(box);
   else if (seg === 'users') renderUsers(box);
+  else if (seg === 'ai') renderAiConfig(box);
   else if (seg === 'email') renderEmail(box);
   else if (seg === 'site') renderSite(box);
   else if (seg === 'audit') renderAudit(box);
@@ -65,6 +67,7 @@ async function renderOverview(box) {
         <h3>快捷入口</h3>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-line" data-goto="users">用户管理</button>
+          <button class="btn btn-line" data-goto="ai">AI 配置</button>
           <button class="btn btn-line" data-goto="email">邮件配置</button>
           <button class="btn btn-line" data-goto="site">站点设置</button>
           <button class="btn btn-line" data-goto="audit">审计日志</button>
@@ -190,6 +193,102 @@ export async function handleUserAction(btn) {
     toast(act === 'ban' ? '已封禁' : act === 'unban' ? '已解封' : act === 'promote' ? '已设为管理员' : '已取消管理员');
     renderAdmin();
   } catch (e) { toast(e.message); }
+}
+
+/* ---------- AI 配置 ---------- */
+async function renderAiConfig(box) {
+  box.innerHTML = '<div class="empty">加载中…</div>';
+  let cfg, users;
+  try {
+    [cfg, users] = await Promise.all([
+      api.get('/admin/ai-config'),
+      api.get('/admin/ai-config/users')
+    ]);
+  } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+
+  const enabledIds = new Set((cfg.enabled_users || []).map(u => u.id));
+  box.innerHTML = `<h2>AI 模型配置</h2>
+    <div class="admin-form">
+      <div class="field"><label>API 接口地址 <span class="hint">OpenAI 兼容格式，如 https://api.openai.com/v1</span></label>
+        <input id="ai_base_url" value="${esc(cfg.api_base_url)}" placeholder="https://api.openai.com/v1"></div>
+      <div class="field"><label>API 密钥 <span class="hint">${cfg.api_key ? '已设置，留空保持不变' : ''}</span></label>
+        <input id="ai_api_key" type="password" placeholder="${cfg.api_key ? '******' : 'sk-...'}"></div>
+      <div class="field"><label>模型 ID <span class="hint">如 gpt-4o-mini、qwen-plus、deepseek-chat</span></label>
+        <input id="ai_model_id" value="${esc(cfg.model_id)}" placeholder="gpt-4o-mini"></div>
+      <div class="field"><label class="switch"><input type="checkbox" id="ai_enabled" ${cfg.enabled ? 'checked' : ''}> 启用 AI 行程规划功能</label></div>
+      <div class="auth-actions" style="flex-direction:row">
+        <button class="btn btn-line" id="ai_test">测试连接</button>
+        <button class="btn btn-primary" id="ai_save">保存配置</button>
+      </div>
+    </div>
+    <div style="height:24px"></div>
+    <h3>启用 AI 功能的用户</h3>
+    <div class="hint" style="margin-bottom:10px">勾选后，对应用户在路线编辑页面将看到「AI 规划」按钮，可一键生成行程路线。</div>
+    <div class="table-wrap"><table class="tbl">
+      <thead><tr><th style="width:50px"><input type="checkbox" id="ai_check_all"></th><th>用户名</th><th>邮箱</th><th>角色</th><th>状态</th></tr></thead>
+      <tbody id="ai_user_body">
+        ${(users.list || []).map(u => `<tr>
+          <td><input type="checkbox" class="ai_user_cb" data-id="${u.id}" ${enabledIds.has(u.id) ? 'checked' : ''} ${u.status === 'banned' ? 'disabled' : ''}></td>
+          <td><strong>${esc(u.username || '—')}</strong></td>
+          <td>${esc(u.email || '—')}</td>
+          <td>${u.role === 'admin' ? '<span class="pill pill-admin">管理员</span>' : '<span class="pill pill-user">用户</span>'}</td>
+          <td>${u.status === 'banned' ? '<span class="pill pill-ban">已封禁</span>' : '<span class="pill pill-ok">正常</span>'}</td>
+        </tr>`).join('') || '<tr><td colspan="5" class="empty">暂无用户</td></tr>'}
+      </tbody>
+    </table></div>
+    <div class="auth-actions" style="flex-direction:row;margin-top:12px">
+      <button class="btn btn-primary" id="ai_save_users">保存启用用户</button>
+    </div>`;
+
+  /* 全选/取消全选 */
+  const checkAll = document.getElementById('ai_check_all');
+  if (checkAll) {
+    checkAll.onchange = () => {
+      document.querySelectorAll('.ai_user_cb:not(:disabled)').forEach(cb => { cb.checked = checkAll.checked; });
+    };
+  }
+
+  /* 测试连接：使用当前表单中的配置（未保存也可测试） */
+  document.getElementById('ai_test').onclick = async () => {
+    const btn = document.getElementById('ai_test');
+    btn.disabled = true;
+    btn.textContent = '测试中…';
+    try {
+      const res = await api.post('/admin/ai-config/test', {
+        api_base_url: document.getElementById('ai_base_url').value.trim(),
+        api_key: document.getElementById('ai_api_key').value,
+        model_id: document.getElementById('ai_model_id').value.trim()
+      });
+      toast('连接成功！模型回复：' + (res && res.reply ? res.reply : '正常'));
+    } catch (e) {
+      toast(e.message || '测试失败');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '测试连接';
+    }
+  };
+
+  /* 保存配置 */
+  document.getElementById('ai_save').onclick = async () => {
+    try {
+      await api.put('/admin/ai-config', {
+        api_base_url: document.getElementById('ai_base_url').value.trim(),
+        api_key: document.getElementById('ai_api_key').value,
+        model_id: document.getElementById('ai_model_id').value.trim(),
+        enabled: document.getElementById('ai_enabled').checked
+      });
+      toast('AI 配置已保存');
+    } catch (e) { toast(e.message); }
+  };
+
+  /* 保存启用用户 */
+  document.getElementById('ai_save_users').onclick = async () => {
+    const userIds = Array.from(document.querySelectorAll('.ai_user_cb:checked')).map(cb => parseInt(cb.dataset.id, 10));
+    try {
+      await api.put('/admin/ai-config/users', { user_ids: userIds });
+      toast('已保存启用用户列表（' + userIds.length + ' 人）');
+    } catch (e) { toast(e.message); }
+  };
 }
 
 /* ---------- 邮件配置 ---------- */

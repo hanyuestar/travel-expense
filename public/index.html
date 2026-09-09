@@ -62,18 +62,29 @@
     <div class="field"><label>路线名称 <span class="hint">如：西北大环线 / 京都赏枫</span></label><input id="f_name" placeholder="路线名称"></div>
     <div class="exp-grid">
       <div class="field"><label>年份</label><input id="f_year" placeholder="2026" inputmode="numeric"></div>
-      <div class="field"><label>出行日期</label><input id="f_daterange" placeholder="6/17 - 6/24"></div>
+      <div class="field"><label>开始日期</label><input type="date" id="f_start_date"></div>
+      <div class="field"><label>结束日期</label><input type="date" id="f_end_date"></div>
       <div class="field"><label>类型</label>
         <select id="f_type"><option value="自由行">自由行</option><option value="跟团">跟团</option><option value="半自由行">半自由行</option></select>
       </div>
-      <div class="field"><label>天数</label><input id="f_days" placeholder="8" inputmode="numeric"></div>
+      <div class="field"><label>天数 <span class="hint">自动计算</span></label><input id="f_days" placeholder="自动" readonly style="background:#f5f7f6;cursor:not-allowed"></div>
       <div class="field"><label>同行人数 <span class="hint">用于算人均</span></label><input id="f_people" placeholder="2" inputmode="numeric"></div>
       <div class="field"><label>币种</label><select id="f_currency"></select></div>
       <div class="field"><label>总预算 <span class="hint">本位币近似</span></label><input id="f_budget_total" placeholder="0" inputmode="decimal"></div>
       <div class="field"><label>日均预算</label><input id="f_budget_daily" placeholder="0" inputmode="decimal"></div>
       <div class="field"><label>主要目的地</label><input id="f_dest" placeholder="青海、甘肃"></div>
     </div>
-    <div class="field"><label>景点路线</label><textarea id="f_scenic" placeholder="按天记录：Day1 西宁-祁连…；Day2 张掖…"></textarea></div>
+    <input type="hidden" id="f_daterange" value="">
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>景点路线</span>
+        <button type="button" class="btn btn-sm btn-line" id="aiPlanBtn" title="AI 智能规划行程" style="padding:2px 8px;font-size:12px;display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:middle"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v1a3 3 0 0 1-3 3h-1v1a4 4 0 0 1-8 0v-1H7a3 3 0 0 1-3-3v-1a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4z"/><circle cx="9" cy="11" r="1"/><circle cx="15" cy="11" r="1"/></svg>
+          <span style="vertical-align:middle">AI 规划</span>
+        </button>
+      </label>
+      <textarea id="f_scenic" placeholder="按天记录：Day1 西宁-祁连…；Day2 张掖…"></textarea>
+    </div>
     <div class="field"><label>住宿位置</label><textarea id="f_hotel" placeholder="如家武林广场店、迪堡酒店…"></textarea></div>
     <div class="field">
       <label>9 类花费（元）<span class="hint">只填知道的，留空计 0</span></label>

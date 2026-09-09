@@ -1,10 +1,11 @@
-/* 路线 API：CRUD（owner 隔离 + 种子示例全员可见/只读）+ 统计
+/* 路线 API：CRUD（owner 隔离 + 种子示例全员可见/只读）+ 统计 + AI行程规划
  * 鉴权：requireAuth 之后调用；req.user 已注入 */
 'use strict';
 const crypto = require('crypto');
 const { fail, ok, created, escapeLike } = require('./http');
 const dbModule = require('./db');
 const { authFromReq } = require('./auth');
+const aiService = require('./ai_service');
 const { toCsv } = require('./csv');
 
 const db = () => dbModule.db;
@@ -66,6 +67,37 @@ async function handle(req, res, url, body) {
   /* 统计接口优先 */
   if (rest === '/stats/summary') return statsSummary(res, user, query);
   if (rest === '/stats/trend') return statsTrend(res, user, query);
+
+  /* ---------- AI 行程规划 ---------- */
+  if (rest === '/ai-plan' && method === 'POST') {
+    /* 校验：当前用户是否被启用 AI 功能 */
+    if (!dbModule.isAiEnabledUser(user.id)) {
+      return fail(res, 403, '当前用户未启用 AI 行程规划功能', { code: 'AI_NOT_ENABLED' });
+    }
+    /* 校验：AI 配置是否已启用且完整 */
+    const cfg = dbModule.getAiConfig();
+    if (!cfg.enabled) return fail(res, 400, 'AI 功能未启用，请联系管理员');
+    if (!cfg.api_base_url || !cfg.api_key || !cfg.model_id) {
+      return fail(res, 400, 'AI 配置不完整，请联系管理员');
+    }
+    /* 参数校验 */
+    const b = body || {};
+    const startDate = String(b.start_date || '').trim();
+    const endDate = String(b.end_date || '').trim();
+    const dest = String(b.dest || '').trim();
+    const days = parseInt(b.days, 10) || 0;
+    if (!startDate || !endDate) return fail(res, 400, '请填写出行起止日期');
+    if (!dest) return fail(res, 400, '请填写主要目的地');
+    if (days <= 0) return fail(res, 400, '天数无效');
+    try {
+      const itinerary = await aiService.planItinerary(cfg, { startDate, endDate, dest, days });
+      dbModule.audit(user.id, 'ai_plan_route', 'routes', null,
+        `AI 规划行程：${dest}（${startDate} ~ ${endDate}，${days}天）`, req.socket.remoteAddress || '');
+      return ok(res, { scenic: itinerary });
+    } catch (e) {
+      return fail(res, 400, 'AI 行程规划失败：' + e.message);
+    }
+  }
 
   /* GET /api/routes 列表（分页） */
   if (rest === '' && method === 'GET') {

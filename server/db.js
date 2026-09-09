@@ -1,5 +1,5 @@
 /* 数据层：better-sqlite3 连接 + 建表（幂等）+ 种子数据
- * 启动时 initDb()：7 张表 + 种子管理员(admin/123456, 首登强制改密) + 首次导入 routes.json 为全员可见示例 */
+ * 启动时 initDb()：表 + 种子管理员(admin/123456, 首登强制改密) + 首次导入 routes.json 为全员可见示例 */
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -84,6 +84,20 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_logs(created_at);
+
+CREATE TABLE IF NOT EXISTS ai_config (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  api_base_url TEXT, api_key TEXT, model_id TEXT,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER, updated_by INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS ai_enabled_users (
+  user_id INTEGER PRIMARY KEY,
+  enabled_at INTEGER NOT NULL,
+  enabled_by INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 `;
 
 let db = null;
@@ -125,6 +139,7 @@ function addColumn(table, col, def) {
 function seedSingleton() {
   db.prepare('INSERT OR IGNORE INTO email_config (id) VALUES (1)').run();
   db.prepare('INSERT OR IGNORE INTO site_settings (id) VALUES (1)').run();
+  db.prepare('INSERT OR IGNORE INTO ai_config (id) VALUES (1)').run();
 }
 
 function seedAdmin() {
@@ -175,6 +190,18 @@ function parseDateRange(dr, year) {
   return { start: '', end: '' };
 }
 
+/* 由起止日期生成显示用 daterange 文本（如 2026/06/17 - 2026/06/24） */
+function buildDateRangeText(start, end) {
+  if (!start && !end) return '';
+  const fmt = (s) => {
+    if (!s) return '';
+    const [y, m, d] = s.split('-');
+    return y && m && d ? `${y}/${m}/${d}` : s;
+  };
+  if (start && end && start !== end) return `${fmt(start)} - ${fmt(end)}`;
+  return fmt(start || end);
+}
+
 /* 行 → JSON（重组 exp 对象，兼容原前端） */
 function routeToJson(row) {
   const exp = {};
@@ -189,13 +216,20 @@ function routeToJson(row) {
 
 function bind(data, userId, isSeed, now, id) {
   const e = data.exp || {};
+  /* 起止日期优先取前端传入的 start_date/end_date，否则从 daterange 文本解析 */
+  const startDate = (data.start_date || '').trim();
+  const endDate = (data.end_date || '').trim();
   const dr = parseDateRange(data.daterange, data.year);
+  const start = startDate || dr.start || '';
+  const end = endDate || dr.end || '';
+  /* daterange 显示文本：优先用前端传入的，否则由起止日期生成，保持兼容 */
+  const daterange = (data.daterange && data.daterange.trim()) || buildDateRangeText(start, end);
   return {
     id: id || data.id || uid('r'), owner_id: userId, is_seed: isSeed ? 1 : 0,
-    year: data.year || '', name: data.name || '', daterange: data.daterange || '', type: data.type || '自由行',
+    year: data.year || '', name: data.name || '', daterange, type: data.type || '自由行',
     days: parseInt(data.days) || 0, people: parseInt(data.people) || 0,
     dest: data.dest || '', scenic: data.scenic || '', hotel: data.hotel || '',
-    start_date: data.start_date || dr.start || '', end_date: data.end_date || dr.end || '',
+    start_date: start, end_date: end,
     currency: (data.currency && String(data.currency).trim()) || 'CNY',
     budget_total: num(data.budget_total), budget_daily: num(data.budget_daily),
     exp_traffic: num(e['交通']), exp_flight: num(e['机票']), exp_train: num(e['高铁']),
@@ -247,6 +281,54 @@ function findRouteByShareToken(token) {
   return row ? routeToJson(row) : null;
 }
 
+/* ---------- AI 配置 ---------- */
+function getAiConfig() {
+  const c = db.prepare('SELECT * FROM ai_config WHERE id = 1').get() || {};
+  return {
+    api_base_url: c.api_base_url || '',
+    api_key: c.api_key || '',
+    model_id: c.model_id || '',
+    enabled: !!c.enabled,
+    updated_at: c.updated_at || null,
+    updated_by: c.updated_by || null
+  };
+}
+function saveAiConfig(data, adminId) {
+  const cur = getAiConfig();
+  const apiKey = data.api_key && data.api_key !== '******' ? String(data.api_key) : (cur.api_key || '');
+  db.prepare(`UPDATE ai_config SET api_base_url=?, api_key=?, model_id=?, enabled=?, updated_at=?, updated_by=? WHERE id=1`)
+    .run(
+      String(data.api_base_url || '').trim(),
+      apiKey,
+      String(data.model_id || '').trim(),
+      data.enabled ? 1 : 0,
+      Date.now(),
+      adminId
+    );
+  return getAiConfig();
+}
+
+/* ---------- AI 启用用户 ---------- */
+function getAiEnabledUserIds() {
+  return db.prepare('SELECT user_id FROM ai_enabled_users').all().map(r => r.user_id);
+}
+function isAiEnabledUser(userId) {
+  return !!db.prepare('SELECT 1 FROM ai_enabled_users WHERE user_id = ?').get(userId);
+}
+function setAiEnabledUsers(userIds, adminId) {
+  const now = Date.now();
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM ai_enabled_users').run();
+    const stmt = db.prepare('INSERT OR IGNORE INTO ai_enabled_users (user_id, enabled_at, enabled_by) VALUES (?, ?, ?)');
+    for (const uid of userIds) {
+      const id = parseInt(uid, 10);
+      if (id > 0) stmt.run(id, now, adminId);
+    }
+  });
+  tx();
+  return getAiEnabledUserIds();
+}
+
 /* 审计日志：auth 与 admin 共用的唯一实现（写入失败不阻塞主流程） */
 function audit(actorId, action, targetType, targetId, detail, ip) {
   try {
@@ -261,5 +343,6 @@ module.exports = {
   ROUTE_COLS,
   routeToJson, insertRoute, updateRoute, getRoute,
   getShareToken, setShareToken, clearShareToken, findRouteByShareToken,
+  getAiConfig, saveAiConfig, getAiEnabledUserIds, isAiEnabledUser, setAiEnabledUsers,
   audit
 };
