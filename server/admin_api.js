@@ -188,6 +188,7 @@ async function handle(req, res, url, body) {
       api_key: c.api_key ? '******' : '',
       model_id: c.model_id,
       enabled: c.enabled,
+      skip_ssl_verify: c.skip_ssl_verify,
       enabled_users: enabledUsers.map(u => ({ id: u.id, username: u.username || '', email: u.email || '' }))
     });
   }
@@ -197,7 +198,8 @@ async function handle(req, res, url, body) {
       api_base_url: b.api_base_url,
       api_key: b.api_key,
       model_id: b.model_id,
-      enabled: !!b.enabled
+      enabled: !!b.enabled,
+      skip_ssl_verify: !!b.skip_ssl_verify
     }, admin.id);
     dbModule.audit(admin.id, 'update_ai_config', 'ai_config', '1', '更新 AI 模型配置', ip);
     return ok(res, true);
@@ -211,7 +213,8 @@ async function handle(req, res, url, body) {
         cfg = {
           api_base_url: String(b.api_base_url || ''),
           api_key: String(b.api_key || ''),
-          model_id: String(b.model_id || '')
+          model_id: String(b.model_id || ''),
+          skip_ssl_verify: !!b.skip_ssl_verify
         };
       } else {
         cfg = dbModule.getAiConfig();

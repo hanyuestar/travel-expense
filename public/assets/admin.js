@@ -216,6 +216,7 @@ async function renderAiConfig(box) {
       <div class="field"><label>模型 ID <span class="hint">如 gpt-4o-mini、qwen-plus、deepseek-chat</span></label>
         <input id="ai_model_id" value="${esc(cfg.model_id)}" placeholder="gpt-4o-mini"></div>
       <div class="field"><label class="switch"><input type="checkbox" id="ai_enabled" ${cfg.enabled ? 'checked' : ''}> 启用 AI 行程规划功能</label></div>
+      <div class="field"><label class="switch"><input type="checkbox" id="ai_skip_ssl" ${cfg.skip_ssl_verify ? 'checked' : ''}> 跳过 SSL 证书验证 <span class="hint">内网/自签名证书（如 Synology NAS）时开启</span></label></div>
       <div class="auth-actions" style="flex-direction:row">
         <button class="btn btn-line" id="ai_test">测试连接</button>
         <button class="btn btn-primary" id="ai_save">保存配置</button>
@@ -257,7 +258,8 @@ async function renderAiConfig(box) {
       const res = await api.post('/admin/ai-config/test', {
         api_base_url: document.getElementById('ai_base_url').value.trim(),
         api_key: document.getElementById('ai_api_key').value,
-        model_id: document.getElementById('ai_model_id').value.trim()
+        model_id: document.getElementById('ai_model_id').value.trim(),
+        skip_ssl_verify: document.getElementById('ai_skip_ssl').checked
       });
       toast('连接成功！模型回复：' + (res && res.reply ? res.reply : '正常'));
     } catch (e) {
@@ -275,7 +277,8 @@ async function renderAiConfig(box) {
         api_base_url: document.getElementById('ai_base_url').value.trim(),
         api_key: document.getElementById('ai_api_key').value,
         model_id: document.getElementById('ai_model_id').value.trim(),
-        enabled: document.getElementById('ai_enabled').checked
+        enabled: document.getElementById('ai_enabled').checked,
+        skip_ssl_verify: document.getElementById('ai_skip_ssl').checked
       });
       toast('AI 配置已保存');
     } catch (e) { toast(e.message); }

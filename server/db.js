@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS ai_config (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   api_base_url TEXT, api_key TEXT, model_id TEXT,
   enabled INTEGER NOT NULL DEFAULT 0,
+  skip_ssl_verify INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER, updated_by INTEGER
 );
 
@@ -122,6 +123,7 @@ function initDb() {
   addColumn('routes', 'budget_daily', 'REAL DEFAULT 0');
   addColumn('routes', 'share_token', 'TEXT');
   addColumn('site_settings', 'home_currency', "TEXT NOT NULL DEFAULT 'CNY'");
+  addColumn('ai_config', 'skip_ssl_verify', "INTEGER NOT NULL DEFAULT 0");
   seedSingleton();
   seedAdmin();
   seedRoutes();
@@ -289,6 +291,7 @@ function getAiConfig() {
     api_key: c.api_key || '',
     model_id: c.model_id || '',
     enabled: !!c.enabled,
+    skip_ssl_verify: !!c.skip_ssl_verify,
     updated_at: c.updated_at || null,
     updated_by: c.updated_by || null
   };
@@ -296,12 +299,13 @@ function getAiConfig() {
 function saveAiConfig(data, adminId) {
   const cur = getAiConfig();
   const apiKey = data.api_key && data.api_key !== '******' ? String(data.api_key) : (cur.api_key || '');
-  db.prepare(`UPDATE ai_config SET api_base_url=?, api_key=?, model_id=?, enabled=?, updated_at=?, updated_by=? WHERE id=1`)
+  db.prepare(`UPDATE ai_config SET api_base_url=?, api_key=?, model_id=?, enabled=?, skip_ssl_verify=?, updated_at=?, updated_by=? WHERE id=1`)
     .run(
       String(data.api_base_url || '').trim(),
       apiKey,
       String(data.model_id || '').trim(),
       data.enabled ? 1 : 0,
+      data.skip_ssl_verify ? 1 : 0,
       Date.now(),
       adminId
     );

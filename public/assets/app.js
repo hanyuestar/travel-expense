@@ -424,10 +424,13 @@ export function openForm(id) {
   document.getElementById('f_notes').value = r ? (r.notes || '') : '';
   CATS.forEach(c => { document.getElementById('exp_' + c).value = r && r.exp && r.exp[c] != null ? r.exp[c] : ''; });
 
-  /* AI 按钮：仅当当前用户被启用 AI 功能时显示 */
+  /* AI 按钮：仅当当前用户被启用 AI 功能时显示
+   * 启用方式：管理后台 → AI 配置 → 勾选对应用户 → 保存启用用户 */
   const aiBtn = document.getElementById('aiPlanBtn');
   if (aiBtn) {
-    aiBtn.style.display = (store.user && store.user.ai_enabled) ? 'inline-flex' : 'none';
+    const showAi = !!(store.user && store.user.ai_enabled);
+    aiBtn.style.display = showAi ? 'inline-flex' : 'none';
+    aiBtn.style.visibility = showAi ? 'visible' : 'hidden';
   }
 }
 

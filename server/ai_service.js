@@ -1,8 +1,24 @@
 /* AI 服务：OpenAI 兼容接口调用（文本模型）
  * - testConnection：发送最简 chat completion 验证连通性与密钥
  * - planItinerary：根据起止日期、目的地、天数生成行程路线文本
- * 使用 Node 18+ 内置全局 fetch，无额外依赖。 */
+ * 使用 Node 18+ 内置全局 fetch，无额外依赖。
+ * 支持 skip_ssl_verify：内网/自签名证书场景跳过 SSL 验证（Synology NAS 等常见）。 */
 'use strict';
+
+/* undici 是 Node.js 18+ 内置的 fetch 底层实现，用于自定义 dispatcher 跳过 SSL 验证 */
+let undiciAgent = null;
+function getInsecureDispatcher() {
+  if (!undiciAgent) {
+    try {
+      const { Agent } = require('undici');
+      undiciAgent = new Agent({ connect: { rejectUnauthorized: false } });
+    } catch (e) {
+      /* 极少数环境 undici 不可用，回退到环境变量方式 */
+      undiciAgent = null;
+    }
+  }
+  return undiciAgent;
+}
 
 /* 规范化 base URL：确保以 /v1 结尾且无多余斜杠，兼容用户填裸域名或带 path */
 function normalizeBaseUrl(raw) {
@@ -11,6 +27,30 @@ function normalizeBaseUrl(raw) {
   /* 如果用户没填 /v1，自动补上（OpenAI 兼容规范） */
   if (!/\/v\d+$/.test(u)) u += '/v1';
   return u;
+}
+
+/* 提取 fetch 失败的底层原因（证书错误、DNS 错误等），给用户可操作的提示 */
+function extractFetchError(e) {
+  const cause = e && e.cause;
+  const code = cause && cause.code;
+  /* 常见 SSL/证书错误 */
+  if (code === 'SELF_SIGNED_CERT_IN_CHAIN' || code === 'DEPTH_ZERO_SELF_SIGNED_CERT' ||
+      code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || code === 'CERT_HAS_EXPIRED' ||
+      code === 'CERT_NOT_YET_VALID' || /cert/i.test(code || '')) {
+    return 'SSL 证书验证失败（' + code + '）。如果是内网/自签名证书（如 Synology NAS），请在 AI 配置中开启「跳过 SSL 证书验证」。';
+  }
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') {
+    return 'DNS 解析失败（' + code + '），请检查 API 地址是否正确、服务器是否能访问该域名。';
+  }
+  if (code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'ETIMEDOUT') {
+    return '网络连接失败（' + code + '），请检查端口是否开放、防火墙是否放行、服务是否正常运行。';
+  }
+  if (code === 'ERR_TLS_CERT_ALTNAME_INVALID') {
+    return 'SSL 证书域名不匹配（' + code + '），证书中的域名与请求地址不一致。可开启「跳过 SSL 证书验证」临时解决。';
+  }
+  /* 其他错误，尽量返回有意义的信息 */
+  const msg = (cause && cause.message) || e.message || '未知错误';
+  return '网络请求失败：' + msg + (code ? '（错误码：' + code + '）' : '');
 }
 
 /* 调用 OpenAI 兼容 /chat/completions，返回 assistant 文本内容 */
@@ -32,21 +72,30 @@ async function chatCompletion(config, messages, opts = {}) {
   const controller = new AbortController();
   const timeoutMs = opts.timeoutMs || 30000;
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  /* 构建 fetch 选项：跳过 SSL 验证时注入 insecure dispatcher */
+  const fetchOpts = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + config.api_key
+    },
+    body: JSON.stringify(body),
+    signal: controller.signal
+  };
+  if (config.skip_ssl_verify) {
+    const dispatcher = getInsecureDispatcher();
+    if (dispatcher) fetchOpts.dispatcher = dispatcher;
+    else process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // 兜底
+  }
+
   let resp;
   try {
-    resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + config.api_key
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal
-    });
+    resp = await fetch(url, fetchOpts);
   } catch (e) {
     clearTimeout(timer);
     if (e.name === 'AbortError') throw new Error('请求超时（' + (timeoutMs / 1000) + '秒），请检查网络或 API 地址');
-    throw new Error('网络请求失败：' + e.message);
+    throw new Error(extractFetchError(e));
   }
   clearTimeout(timer);
 
@@ -103,7 +152,7 @@ async function planItinerary(config, { startDate, endDate, dest, days }) {
       { role: 'system', content: system },
       { role: 'user', content: user }
     ],
-    { temperature: 0.7, max_tokens: 4096, timeoutMs: 60000 }
+    { temperature: 0.7, max_tokens: 4096, timeoutMs: 120000 }
   );
   return content;
 }
