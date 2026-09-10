@@ -47,7 +47,8 @@ function buildSecurityHeaders() {
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     /* CSP：script 仅同源（ES Modules 无内联脚本）；style 允许内联（大量 style 属性）；
-       frame-ancestors 'none' 等价 X-Frame-Options DENY */
+       frame-ancestors 'none' 等价 X-Frame-Options DENY
+       分享页需要内联脚本（导出图片功能），分享页单独设置 CSP */
     'Content-Security-Policy': `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; ${connectSrc} frame-ancestors 'none'`
   };
   if (config.COOKIE_SECURE) {
@@ -170,11 +171,14 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  /* 只读分享页：/share/:token（无需登录，纯服务端渲染 + 转义） */
+  /* 只读分享页：/share/:token（无需登录，纯服务端渲染 + 转义）
+   * 分享页单独设置 CSP，允许内联脚本（导出图片功能需要） */
   const shareM = url.pathname.match(/^\/share\/([A-Za-z0-9]+)$/);
   if (shareM) {
     const r = dbModule.findRouteByShareToken(shareM[1]);
     if (!r) { accessLog(req, res, startMs, 404); return send(res, 404, { ok: false, msg: '分享不存在或已失效' }); }
+    /* 分享页 CSP：允许内联脚本（导出图片），允许 data: 图片（导出预览） */
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'");
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     accessLog(req, res, startMs, 200);
     return res.end(renderSharePage(r));
@@ -312,8 +316,13 @@ function renderSharePage(r) {
   .exp h2{font-size:15px;margin:0 0 6px}
   .pre{white-space:pre-wrap;word-break:break-word;background:#f7fbfa;border-radius:10px;padding:10px;font-size:13px;line-height:1.7;margin-top:6px}
   .foot{text-align:center;color:#9db4ae;font-size:12px;margin-top:22px}
+  .export-bar{display:flex;justify-content:center;gap:10px;margin-top:18px}
+  .export-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;background:#4a90d9;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit}
+  .export-btn:hover{background:#3a7bc8}
+  .export-btn:disabled{background:#aaa;cursor:not-allowed}
+  .export-btn svg{width:16px;height:16px}
 </style></head><body><div class="wrap">
-  <div class="card">
+  <div class="card" id="shareCard">
     <h1>${esc(r.name)}</h1>
     <div class="sub">${esc(r.dest || '旅行路线')} · 只读分享</div>
     <table>${rows.join('')}</table>
@@ -323,6 +332,40 @@ function renderSharePage(r) {
     </div>
     ${r.notes ? `<div class="exp"><h2>备注</h2><div class="pre">${esc(r.notes)}</div></div>` : ''}
   </div>
+  <div class="export-bar">
+    <button class="export-btn" id="exportBtn" onclick="exportAsImage()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      导出为图片
+    </button>
+  </div>
   <div class="foot">由旅行经费工作台生成 · 数据可能随时更新</div>
-</div></body></html>`;
+</div>
+<script src="/assets/html2canvas.min.js"></script>
+<script>
+function exportAsImage() {
+  var btn = document.getElementById('exportBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 生成中…';
+  var card = document.getElementById('shareCard');
+  html2canvas(card, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: '#ffffff',
+    logging: false
+  }).then(function(canvas) {
+    var link = document.createElement('a');
+    var name = (document.querySelector('h1').textContent || '旅行路线').replace(/[\\\\/:*?"<>|]/g, '_');
+    link.download = name + '_' + new Date().toISOString().slice(0,10) + '.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 导出为图片';
+  }).catch(function(err) {
+    alert('导出失败：' + (err.message || err));
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 导出为图片';
+  });
+}
+</script>
+</body></html>`;
 }

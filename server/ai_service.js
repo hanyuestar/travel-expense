@@ -157,4 +157,56 @@ async function planItinerary(config, { startDate, endDate, dest, days }) {
   return content;
 }
 
-module.exports = { testConnection, planItinerary, normalizeBaseUrl };
+/* 行程对话式调整：基于当前已有行程，根据用户指令修改后返回完整行程
+ * 支持多轮对话历史，用户可连续调整。
+ * currentScenic：当前景点路线文本
+ * message：用户本轮调整指令
+ * history：历史对话数组 [{role:'user'|'assistant', content}]
+ * 返回调整后的完整行程文本，可直接回填。 */
+async function adjustItinerary(config, { currentScenic, message, dest, startDate, endDate, days, history }) {
+  if (!currentScenic || !String(currentScenic).trim()) throw new Error('缺少当前行程内容，请先生成或填写行程');
+  if (!message || !String(message).trim()) throw new Error('缺少调整指令');
+  if (!dest) throw new Error('缺少主要目的地');
+  const d = parseInt(days, 10) || 0;
+  if (d <= 0) throw new Error('天数无效');
+
+  const system = '你是一位资深旅行规划师，擅长根据用户的具体要求对已有行程进行精准调整。调整时只修改用户要求的部分，保持其余内容不变，输出完整的调整后行程。';
+
+  const user = `当前已有行程：
+${currentScenic}
+
+旅行基本信息：
+- 主要目的地：${dest}
+- 出行日期：${startDate} 至 ${endDate}（共 ${d} 天）
+
+用户的调整要求：${message}
+
+请根据用户的要求调整行程，输出调整后的完整行程。
+输出要求：
+1. 按天输出，每天以 "Day1"、"Day2"……开头；
+2. 每天包含上午、下午、晚上的主要景点/活动安排，用简短分号分隔；
+3. 每天的住宿城市写在当天末尾，用括号标注；
+4. 只输出行程正文，不要任何开场白、总结或额外说明；
+5. 保持原有的天数和整体结构，只修改用户要求调整的部分；
+6. 路线安排要考虑地理顺序，避免来回折返。`;
+
+  /* 构造 messages：system + 历史对话 + 当前 user 请求 */
+  const messages = [{ role: 'system', content: system }];
+  if (Array.isArray(history) && history.length > 0) {
+    for (const h of history) {
+      if (h && h.role && h.content) {
+        messages.push({ role: String(h.role), content: String(h.content) });
+      }
+    }
+  }
+  messages.push({ role: 'user', content: user });
+
+  const content = await chatCompletion(
+    config,
+    messages,
+    { temperature: 0.7, max_tokens: 4096, timeoutMs: 120000 }
+  );
+  return content;
+}
+
+module.exports = { testConnection, planItinerary, adjustItinerary, normalizeBaseUrl };

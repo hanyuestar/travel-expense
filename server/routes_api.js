@@ -99,6 +99,43 @@ async function handle(req, res, url, body) {
     }
   }
 
+  /* POST /api/routes/ai-chat 行程对话式调整：基于当前行程，按用户指令修改后返回完整行程 */
+  if (rest === '/ai-chat' && method === 'POST') {
+    if (!dbModule.isAiEnabledUser(user.id)) {
+      return fail(res, 403, '当前用户未启用 AI 行程规划功能', { code: 'AI_NOT_ENABLED' });
+    }
+    const cfg = dbModule.getAiConfig();
+    if (!cfg.enabled) return fail(res, 400, 'AI 功能未启用，请联系管理员');
+    if (!cfg.api_base_url || !cfg.api_key || !cfg.model_id) {
+      return fail(res, 400, 'AI 配置不完整，请联系管理员');
+    }
+    const b = body || {};
+    const currentScenic = String(b.current_scenic || '').trim();
+    const message = String(b.message || '').trim();
+    const dest = String(b.dest || '').trim();
+    const startDate = String(b.start_date || '').trim();
+    const endDate = String(b.end_date || '').trim();
+    const days = parseInt(b.days, 10) || 0;
+    const history = Array.isArray(b.history) ? b.history : [];
+    if (!currentScenic) return fail(res, 400, '缺少当前行程内容，请先生成或填写行程');
+    if (!message) return fail(res, 400, '请输入调整要求');
+    if (!dest) return fail(res, 400, '缺少主要目的地');
+    if (!startDate || !endDate) return fail(res, 400, '请填写出行起止日期');
+    if (days <= 0) return fail(res, 400, '天数无效');
+    /* 历史对话长度限制，避免 prompt 过长 */
+    const trimmedHistory = history.slice(-6);
+    try {
+      const itinerary = await aiService.adjustItinerary(cfg, {
+        currentScenic, message, dest, startDate, endDate, days, history: trimmedHistory
+      });
+      dbModule.audit(user.id, 'ai_chat_route', 'routes', null,
+        `AI 调整行程：${dest}，指令：${message.slice(0, 50)}`, req.socket.remoteAddress || '');
+      return ok(res, { scenic: itinerary });
+    } catch (e) {
+      return fail(res, 400, 'AI 行程调整失败：' + e.message);
+    }
+  }
+
   /* GET /api/routes 列表（分页） */
   if (rest === '' && method === 'GET') {
     const hideSeed = query.hideSeed === '1';

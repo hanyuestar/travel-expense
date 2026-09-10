@@ -427,10 +427,17 @@ export function openForm(id) {
   /* AI 按钮：仅当当前用户被启用 AI 功能时显示
    * 启用方式：管理后台 → AI 配置 → 勾选对应用户 → 保存启用用户 */
   const aiBtn = document.getElementById('aiPlanBtn');
+  const aiChatBtn = document.getElementById('aiChatBtn');
+  const showAi = !!(store.user && store.user.ai_enabled);
   if (aiBtn) {
-    const showAi = !!(store.user && store.user.ai_enabled);
     aiBtn.style.display = showAi ? 'inline-flex' : 'none';
     aiBtn.style.visibility = showAi ? 'visible' : 'hidden';
+  }
+  if (aiChatBtn) {
+    /* 调整按钮：需要当前已有行程内容才能调整 */
+    const hasScenic = !!(document.getElementById('f_scenic') && document.getElementById('f_scenic').value.trim());
+    aiChatBtn.style.display = (showAi && hasScenic) ? 'inline-flex' : 'none';
+    aiChatBtn.style.visibility = (showAi && hasScenic) ? 'visible' : 'hidden';
   }
 }
 
@@ -470,6 +477,159 @@ async function aiPlanRoute() {
     btn.innerHTML = originalHTML;
   }
 }
+
+/* ========== AI 行程对话式调整 ========== */
+
+/* 对话状态 */
+const aiChatState = {
+  history: [],       // 对话历史 [{role, content}]
+  lastResult: '',    // 最近一次 AI 返回的行程
+  loading: false
+};
+
+/* 打开 AI 对话调整面板 */
+function openAiChat() {
+  const scenic = document.getElementById('f_scenic').value.trim();
+  if (!scenic) { toast('请先生成或填写行程内容，再进行调整'); return; }
+  const dest = document.getElementById('f_dest').value.trim();
+  if (!dest) { toast('请先填写主要目的地'); return; }
+
+  /* 重置对话状态（每次打开面板时重新开始） */
+  aiChatState.history = [];
+  aiChatState.lastResult = '';
+  aiChatState.loading = false;
+
+  /* 显示当前行程 */
+  document.getElementById('aiChatCurrentContent').textContent = scenic;
+  document.getElementById('aiChatCurrentContent').style.display = 'none';
+
+  /* 清空对话区域 */
+  document.getElementById('aiChatMessages').innerHTML =
+    '<div style="text-align:center;color:#999;font-size:13px;padding:20px 0">' +
+    '输入调整要求，AI 会基于当前行程进行修改<br>' +
+    '<span style="font-size:12px">例如：把第二天的故宫换成颐和园、增加美食推荐、第一天太赶了精简一下</span>' +
+    '</div>';
+
+  /* 隐藏应用栏、清空输入框 */
+  document.getElementById('aiChatApplyBar').style.display = 'none';
+  document.getElementById('aiChatInput').value = '';
+
+  openMask('aiChatMask');
+  setTimeout(() => document.getElementById('aiChatInput').focus(), 100);
+}
+
+/* 当前行程展开/收起 */
+function toggleAiChatCurrent() {
+  const el = document.getElementById('aiChatCurrentContent');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+/* 渲染一条对话消息 */
+function renderAiChatMessage(role, content) {
+  const container = document.getElementById('aiChatMessages');
+  /* 如果是第一条消息，清空占位提示 */
+  if (container.querySelector('div[style*="text-align:center"]')) {
+    container.innerHTML = '';
+  }
+  const isUser = role === 'user';
+  const div = document.createElement('div');
+  div.style.cssText = `margin-bottom:12px;display:flex;${isUser ? 'justify-content:flex-end' : 'justify-content:flex-start'}`;
+  const bubble = document.createElement('div');
+  bubble.style.cssText = `max-width:85%;padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word;${isUser ? 'background:#4a90d9;color:#fff;border-bottom-right-radius:4px' : 'background:#fff;border:1px solid #e0e0e0;border-bottom-left-radius:4px'}`;
+  bubble.textContent = content;
+  div.appendChild(bubble);
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+/* 发送调整指令 */
+async function sendAiChatMessage() {
+  if (aiChatState.loading) return;
+  const input = document.getElementById('aiChatInput');
+  const message = input.value.trim();
+  if (!message) { toast('请输入调整要求'); return; }
+
+  const startDate = document.getElementById('f_start_date').value;
+  const endDate = document.getElementById('f_end_date').value;
+  const dest = document.getElementById('f_dest').value.trim();
+  const days = parseInt(document.getElementById('f_days').value) || 0;
+  /* 当前行程：优先用最近一次 AI 调整结果，否则用表单中的值 */
+  const currentScenic = aiChatState.lastResult || document.getElementById('f_scenic').value.trim();
+
+  if (!startDate || !endDate) { toast('请先选择出行起止日期'); return; }
+  if (!dest) { toast('请先填写主要目的地'); return; }
+  if (days <= 0) { toast('天数无效，请检查起止日期'); return; }
+  if (!currentScenic) { toast('当前行程为空，请先生成或填写行程'); return; }
+
+  /* 渲染用户消息 */
+  renderAiChatMessage('user', message);
+  input.value = '';
+  aiChatState.loading = true;
+
+  /* 显示加载中 */
+  const loadingDiv = document.createElement('div');
+  loadingDiv.style.cssText = 'margin-bottom:12px;display:flex;justify-content:flex-start';
+  loadingDiv.innerHTML = '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:12px;border-bottom-left-radius:4px;padding:10px 14px;font-size:14px;color:#999">AI 正在思考调整方案…</div>';
+  document.getElementById('aiChatMessages').appendChild(loadingDiv);
+  document.getElementById('aiChatMessages').scrollTop = document.getElementById('aiChatMessages').scrollHeight;
+
+  const sendBtn = document.getElementById('aiChatSend');
+  sendBtn.disabled = true;
+  sendBtn.textContent = '发送中…';
+
+  try {
+    const res = await api.post('/routes/ai-chat', {
+      current_scenic: currentScenic,
+      message,
+      dest,
+      start_date: startDate,
+      end_date: endDate,
+      days,
+      history: aiChatState.history
+    });
+
+    /* 移除加载中 */
+    loadingDiv.remove();
+
+    if (res && res.scenic) {
+      /* 记录对话历史 */
+      aiChatState.history.push({ role: 'user', content: message });
+      aiChatState.history.push({ role: 'assistant', content: res.scenic });
+      aiChatState.lastResult = res.scenic;
+
+      /* 渲染 AI 回复 */
+      renderAiChatMessage('assistant', res.scenic);
+
+      /* 显示应用栏 */
+      document.getElementById('aiChatApplyBar').style.display = 'flex';
+    } else {
+      toast('AI 返回内容为空');
+    }
+  } catch (e) {
+    loadingDiv.remove();
+    renderAiChatMessage('assistant', '❌ ' + (e.message || '调整失败'));
+  } finally {
+    aiChatState.loading = false;
+    sendBtn.disabled = false;
+    sendBtn.textContent = '发送';
+  }
+}
+
+/* 应用调整后的行程到表单 */
+function applyAiChatResult() {
+  if (!aiChatState.lastResult) { toast('没有可应用的行程'); return; }
+  document.getElementById('f_scenic').value = aiChatState.lastResult;
+  closeMask('aiChatMask');
+  toast('已应用调整后的行程');
+  /* 应用后更新调整按钮的显示状态（现在有内容了） */
+  const aiChatBtn = document.getElementById('aiChatBtn');
+  if (aiChatBtn && store.user && store.user.ai_enabled) {
+    aiChatBtn.style.display = 'inline-flex';
+    aiChatBtn.style.visibility = 'visible';
+  }
+}
+
+/* ========== AI 行程对话式调整 END ========== */
 
 async function saveForm() {
   const name = document.getElementById('f_name').value.trim();
@@ -630,4 +790,18 @@ export function bindFormEvents() {
   /* AI 规划按钮 */
   const aiBtn = document.getElementById('aiPlanBtn');
   if (aiBtn) aiBtn.onclick = aiPlanRoute;
+  /* AI 对话调整按钮 */
+  const aiChatBtnEl = document.getElementById('aiChatBtn');
+  if (aiChatBtnEl) aiChatBtnEl.onclick = openAiChat;
+  /* AI 对话面板事件 */
+  const aiChatSend = document.getElementById('aiChatSend');
+  if (aiChatSend) aiChatSend.onclick = sendAiChatMessage;
+  const aiChatInput = document.getElementById('aiChatInput');
+  if (aiChatInput) aiChatInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendAiChatMessage(); }
+  });
+  const aiChatApply = document.getElementById('aiChatApply');
+  if (aiChatApply) aiChatApply.onclick = applyAiChatResult;
+  const aiChatToggle = document.getElementById('aiChatCurrentToggle');
+  if (aiChatToggle) aiChatToggle.onclick = toggleAiChatCurrent;
 }

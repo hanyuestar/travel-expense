@@ -39,6 +39,13 @@
 
 ## 📌 版本变更记录
 
+### v1.0.8（2026-09-09）
+在 AI 行程规划基础上增强，并支持把分享页保存成图片（向后兼容 v1.0.7 数据，无需迁移）：
+- **AI 行程调整**：生成行程后可点「调整」打开对话面板，用大白话提要求（如「把第二天换成塔尔寺」「第一天太赶了精简一下」），AI 基于当前行程改好后返回完整版本，可多轮连续调整，满意后点「应用此版本」回填。
+- **分享页导出图片**：只读分享页新增「导出为图片」按钮，一键把行程卡片保存为高清图片，方便发群、发朋友圈或存档。
+- **AI 接入更省心**：AI 配置新增「跳过 SSL 证书验证」开关，内网或自签名证书（如 NAS 自建服务）也能正常接入；接口连不通时会给出明确原因提示。
+- 安卓客户端 APK 随版本发布（GitHub Release 附件 `app-debug.apk`，内置服务器地址）。
+
 ### v1.0.7（2026-09-09）
 新增 AI 行程规划能力 + 出行日期结构化（向后兼容 v1.0.6 数据，无需迁移）：
 - **AI 行程规划**：管理后台新增「AI 配置」页，填写 AI 接口（地址 / 密钥 / 模型）并一键测试连通性；管理员为指定账号开启后，路线编辑页「景点路线」旁出现「AI 规划」按钮，填好起止日期与目的地即可一键生成按天行程草稿（上午 / 下午 / 晚上 + 住宿城市），可手动采纳或改写。
@@ -88,7 +95,7 @@ mkdir -p /volume1/docker/travel
 cd /volume1/docker/travel
 curl -O https://raw.githubusercontent.com/hanyuestar/travel-expense/main/docker-compose.yml
 
-# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.7）
+# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.8）
 docker compose up -d
 
 # 3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
@@ -99,7 +106,7 @@ docker compose up -d
 ```yaml
 services:
   travel-expense:
-    image: ghcr.io/hanyuestar/travel-expense:v1.0.7
+    image: ghcr.io/hanyuestar/travel-expense:v1.0.8
     container_name: travel-expense
     restart: unless-stopped
     ports:
@@ -134,7 +141,7 @@ docker run -d --name travel-expense \
   -p 8108:3000 \
   -v /your/path/data:/data \
   --restart unless-stopped \
-  ghcr.io/hanyuestar/travel-expense:v1.0.7
+  ghcr.io/hanyuestar/travel-expense:v1.0.8
 ```
 
 ### 方式 C：手动运行（无 Docker，需 Node 18+）
@@ -152,8 +159,8 @@ node app.js            # 默认端口 3000；后端自动托管 public/ 前端�
 把网页版打包成手机原生 APP：桌面常驻图标、离线可开 UI、登录后像原生应用一样使用。APP 通过 `fetch` **直连你自托管的服务器**，数据仍全在你自己的服务器上，APP 本身不另存数据。
 
 ### 快速使用（已发布 APK）
-- **下载**：[`app-debug.apk`（v1.0.7）](https://github.com/hanyuestar/travel-expense/releases/download/v1.0.7/app-debug.apk)
-- 备用地址：<https://github.com/hanyuestar/travel-expense/releases/tag/v1.0.7>
+- **下载**：[`app-debug.apk`（v1.0.8）](https://github.com/hanyuestar/travel-expense/releases/download/v1.0.8/app-debug.apk)
+- 备用地址：<https://github.com/hanyuestar/travel-expense/releases/tag/v1.0.8>
 - 手机允许「未知来源」安装后打开即可——**服务器地址已内置，打开即用，无需填写**。
 
 > 该发布包已内置作者服务器地址；若你用自己的服务器，请按下面「自己构建」重新打包。
@@ -173,7 +180,7 @@ npm run build                                    # 产物：android/app/build/ou
 > - 原生定制（第三方 Cookie 放行 + 按主机放行的 SSL 处理）由 `npm run sync` 自动通过 `scripts/patch-native.mjs` 注入生成的 `MainActivity.java`，无需手工改原生工程；详见 `android-app/README.md`。
 
 ### 服务端配合（关键）
-安卓 APP 跨域直连需要服务端开启：在 `docker-compose.yml` 中设置 `COOKIE_SECURE=true` 与 `ALLOWED_ORIGINS=*`（v1.0.7 示例 compose 已默认写入）。否则会出现「登录成功但刷新又退出」「API 被 CORS 拒绝」。
+安卓 APP 跨域直连需要服务端开启：在 `docker-compose.yml` 中设置 `COOKIE_SECURE=true` 与 `ALLOWED_ORIGINS=*`（示例 compose 已默认写入）。否则会出现「登录成功但刷新又退出」「API 被 CORS 拒绝」。
 
 ### 关于「证书不被信任」（SSL）
 安卓 WebView 默认信任系统根证书；Let's Encrypt 证书本机原生信任。若登录时报「网站证据不被信任 / 证书不被信任」，绝大多数情况是**服务器证书的 SAN（主题备用名称）未覆盖你实际使用的子域名**。例如证书只签发给 `your-domain.example.com`，而 APP 内置地址是 `app.your-domain.example.com`——子域名不在证书内，WebView 即拒绝连接。
@@ -232,8 +239,9 @@ npm run build                                    # 产物：android/app/build/ou
 ## 🧪 开发与测试
 
 ```bash
-cd travel-expense/server && npm install   # 安装依赖（better-sqlite3）
-node tests/run-all.js                     # 一条命令跑全部测试（主回归 84 例 + 深测 16 例 + 4 组功能冒烟）
+cd travel-expense
+npm install --prefix server              # 安装后端依赖（better-sqlite3 / nodemailer）
+node tests/run-all.js                    # 在仓库根目录执行：一条命令跑全部测试（主回归 + 深测 + 4 组功能冒烟）
 ```
 
 - `tests/regression.test.js` / `regression.deep.test.js`：规格书全量回归（auth / routes / admin / 隔离 / 封禁 / 限流 / 邮件码）
@@ -251,7 +259,7 @@ node tests/run-all.js                     # 一条命令跑全部测试（主回
 1. ghcr 发布无需配置（自动注入 `GITHUB_TOKEN`）；Docker Hub 需配置 Secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（未配置则自动跳过 Docker Hub，不影响 ghcr）。
 2. 打版本 tag 并推送即触发构建（linux/amd64 + arm64 双架构）：
    ```bash
-   git tag -a v1.0.7 -m "v1.0.7 single-image"
+   git tag -a v1.0.8 -m "v1.0.8 single-image"
    git push origin main --tags
    ```
 3. 镜像推送到：
