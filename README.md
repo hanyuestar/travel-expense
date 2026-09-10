@@ -241,7 +241,7 @@ npm run build                                    # 产物：android/app/build/ou
 ```bash
 cd travel-expense
 npm install --prefix server              # 安装后端依赖（better-sqlite3 / nodemailer）
-node tests/run-all.js                    # 在仓库根目录执行：一条命令跑全部测试（主回归 + 深测 + 4 组功能冒烟）
+node tests/run-all.js                    # 在仓库根目录执行：一条命令跑全部测试（主回归 + 深测 + 5 组功能冒烟）
 ```
 
 - `tests/regression.test.js` / `regression.deep.test.js`：规格书全量回归（auth / routes / admin / 隔离 / 封禁 / 限流 / 邮件码）
