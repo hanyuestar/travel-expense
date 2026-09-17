@@ -245,6 +245,40 @@ async function main() {
     check('stats/trend year=' + yr + '：响应年份筛选且按月聚合（period 为 YYYY-MM）', r.status === 200 && trendYr.length > 0 && trendYr.every(p => new RegExp('^' + yr + '-\\d{2}$').test(p.period)), r);
   }
 
+  /* 年份胶囊数据源 + 搜索口径一致性（验收 bug 回归）
+   * 背景：年份胶囊曾仅取当前分页、搜索仅前端过滤，导致「列表已过滤、统计仍为全量」； */
+  section('T5b routes_api — 年份接口 / 搜索口径一致性');
+  r = await req('GET', '/api/routes/years', null, userCookie);
+  const yrs = (r.json && r.json.data && r.json.data.years) || [];
+  check('/routes/years 返回数组', r.status === 200 && Array.isArray(yrs), r);
+  check('/routes/years 去重且倒序', yrs.length > 0 && new Set(yrs).size === yrs.length
+    && JSON.stringify(yrs) === JSON.stringify(yrs.slice().sort((a, b) => b.localeCompare(a))), yrs);
+  /* 与「当前」可见列表对比（前面的用例已删除本人路线，故须重新拉取而非复用旧快照） */
+  r = await req('GET', '/api/routes?page=1&pageSize=50', null, userCookie);
+  const freshList = (r.json && r.json.data && r.json.data.list) || [];
+  const expectYears = Array.from(new Set(freshList.map(x => x.year).filter(Boolean))).sort((a, b) => b.localeCompare(a));
+  check('/routes/years === 可见列表去重年份（不受分页/year 过滤影响）', JSON.stringify(yrs) === JSON.stringify(expectYears), { yrs, expectYears });
+  r = await req('GET', '/api/routes/years?hideSeed=1', null, userCookie);
+  const yrsNoSeed = (r.json && r.json.data && r.json.data.years) || [];
+  check('/routes/years?hideSeed=1 为全量年份子集', r.status === 200 && Array.isArray(yrsNoSeed) && yrsNoSeed.every(y => yrs.indexOf(y) >= 0), { yrsNoSeed, yrs });
+
+  /* 列表与统计必须消费同一 q：直接对比列表 total 与 stats/summary.count */
+  const KW = '江南';
+  r = await req('GET', '/api/routes?q=' + encodeURIComponent(KW) + '&page=1&pageSize=50', null, userCookie);
+  const kwList = (r.json && r.json.data) || {};
+  check('列表 q=' + KW + ' 命中 1 条（种子示例）', r.status === 200 && kwList.total === 1, kwList.total);
+  r = await req('GET', '/api/routes/stats/summary', null, userCookie);
+  const allSum = (r.json && r.json.data) || {};
+  r = await req('GET', '/api/routes/stats/summary?q=' + encodeURIComponent(KW), null, userCookie);
+  const kwSum = (r.json && r.json.data) || {};
+  check('stats/summary 消费 q：count === 列表 total（口径一致）', r.status === 200 && kwSum.count === kwList.total, { count: kwSum.count, total: kwList.total });
+  check('stats/summary 确实按 q 收窄（小于全量）', kwSum.count < allSum.count, { filtered: kwSum.count, all: allSum.count });
+  r = await req('GET', '/api/routes/stats/trend?q=' + encodeURIComponent(KW), null, userCookie);
+  const kwTrend = (r.json && r.json.data) || [];
+  const kwTrendSum = kwTrend.reduce((a, p) => a + (p.total || 0), 0);
+  check('stats/trend 消费 q：趋势总额 === summary grand（口径一致）', r.status === 200
+    && Math.abs(kwTrendSum - (kwSum.grand || 0)) < 0.01, { kwTrendSum, grand: kwSum.grand });
+
   // 清空保留种子
   r = await req('POST', '/api/routes', { name: '临时路线', year: '2026', exp: { 交通: 10 } }, userCookie);
   const tmpId = r.json.data.id;

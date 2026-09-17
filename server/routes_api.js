@@ -56,6 +56,19 @@ function findVisible(id, userId) {
     .get(id, userId) || null;
 }
 
+/* 全量去重年份（不受 year 过滤，确保年份胶囊完整）；hideSeed 时排除种子路线年份 */
+function routesYears(res, userId, query) {
+  const hideSeed = query.hideSeed === '1';
+  const args = [userId];
+  let where = `(owner_id = ?`;
+  if (!hideSeed) where += ` OR is_seed = 1`;
+  where += `)`;
+  if (hideSeed) where += ` AND is_seed = 0`;
+  const rows = db().prepare(`SELECT DISTINCT year FROM routes WHERE ${where} AND year IS NOT NULL AND year != ''`).all(...args);
+  const years = rows.map(r => r.year).sort((a, b) => b.localeCompare(a));
+  return ok(res, { years });
+}
+
 async function handle(req, res, url, body) {
   const user = authFromReq(req);
   if (!user) return fail(res, 401, '请先登录', { code: 'UNAUTHORIZED' });
@@ -136,7 +149,7 @@ async function handle(req, res, url, body) {
     }
   }
 
-  /* GET /api/routes 列表（分页） */
+  /* GET /api/routes 列表（分页 + 服务端 year/q 过滤，与统计口径一致） */
   if (rest === '' && method === 'GET') {
     const hideSeed = query.hideSeed === '1';
     const { rows, total, page, pageSize } = listForUser(user.id, {
@@ -147,6 +160,12 @@ async function handle(req, res, url, body) {
       pageSize: query.pageSize
     });
     return ok(res, { list: rows.map(r => dbModule.routeToJson(r)), total, page, pageSize });
+  }
+
+  /* GET /api/routes/years —— 返回当前用户可见的全量去重年份（受 hideSeed 影响，不受 year 过滤）
+   * 工作台年份筛选胶囊据此渲染，确保跨年数据多、分页时年份选项完整。 */
+  if (rest === '/years' && method === 'GET') {
+    return routesYears(res, user.id, query);
   }
 
   /* POST /api/routes 新建 */
@@ -284,8 +303,10 @@ const CATS = dbModule.EXP_KEYS; // ['交通','机票',...]
 function statsSummary(res, user, query) {
   const hideSeed = query.hideSeed === '1';
   const year = query.year || '';
+  /* 搜索关键字需与列表同源过滤，否则「列表已过滤、统计仍为全量」口径不一致 */
+  const q = query.q || '';
   const home = homeCurrency();
-  const rows = queryRoutes(user.id, { year, hideSeed });
+  const rows = queryRoutes(user.id, { year, q, hideSeed });
   const byYear = {};
   const totals = {};
   CATS.forEach(c => (totals[c] = 0));
@@ -323,8 +344,10 @@ function statsSummary(res, user, query) {
 function statsTrend(res, user, query) {
   const hideSeed = query.hideSeed === '1';
   const year = query.year || '';
+  /* 同 statsSummary：趋势图亦须消费搜索关键字，保持与列表同源 */
+  const q = query.q || '';
   const home = homeCurrency();
-  const rows = queryRoutes(user.id, { year, hideSeed });
+  const rows = queryRoutes(user.id, { year, q, hideSeed });
   // 筛选全部年份 → 按年聚合，呈现年消费趋势（标签为具体年份，如 2024）
   if (!year) {
     const byYear = {};

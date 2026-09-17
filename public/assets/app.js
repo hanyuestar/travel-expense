@@ -3,12 +3,29 @@ import { store, toast, api, navigate, esc, fmt, fmtMoney, CATS, parseStart, fmtT
 import { COLORS, totalOf, donut, trendBar } from './charts.js';
 
 let routes = [];
-let state = { filterYear: 'all', search: '', curId: null, detailId: null, page: 1, total: 0, pageSize: 50 };
+let searchTimer = null;
+let state = { filterYear: 'all', search: '', curId: null, detailId: null, page: 1, total: 0, pageSize: 50, years: [] };
+
+/* 全量年份（由 GET /api/routes/years 下发），工作台年份胶囊据此渲染。
+ * 注意：必须用 .catch 兜底而非 try/catch —— 接口异常是 Promise 拒绝，
+ * 未捕获会连带中断调用方的 Promise.all，导致工作台整体渲染失败。 */
+export function loadYears() {
+  const qs = store.hideSeed ? '?hideSeed=1' : '';
+  return api.get('/routes/years' + qs)
+    .then(data => { state.years = (data && data.years) || []; })
+    .catch(e => {
+      if (e && e.status === 401) { navigate('/login'); return; }
+      /* 年份接口失败不应阻断主体：降级为「仅全部」并保留既有列表能力 */
+      state.years = [];
+    });
+}
 
 export function refreshRoutes(page) {
   const qs = new URLSearchParams();
   if (store.hideSeed) qs.set('hideSeed', '1');
   if (state.filterYear && state.filterYear !== 'all') qs.set('year', state.filterYear);
+  /* 搜索改为服务端过滤，与统计口径一致（列表/年份/搜索/统计同源） */
+  if (state.search.trim()) qs.set('q', state.search.trim());
   qs.set('page', String(page || state.page || 1));
   qs.set('pageSize', String(state.pageSize || 50));
   return api.get('/routes' + (qs.toString() ? '?' + qs.toString() : ''));
@@ -28,6 +45,16 @@ export async function loadRoutes() {
   }
 }
 
+/* 增删改导入后统一刷新：列表 + 全量年份胶囊 + 分页 + 统计。
+ * 年份可能因新增/删除/导入而变化，故必须重新拉取 /routes/years 而非复用旧 state.years。 */
+async function reloadAfterMutation() {
+  await Promise.all([loadRoutes(), loadYears()]);
+  renderYearChips();
+  renderRoutes();
+  renderPager();
+  renderStats();
+}
+
 /* 排序用起始时间：优先结构化 start_date，回退自由文本解析 */
 function startMs(r) {
   if (r.start_date) { const t = new Date(r.start_date + 'T00:00:00'); if (!isNaN(t.getTime())) return t.getTime(); }
@@ -41,14 +68,10 @@ export function getRoutes() { return routes; }
 export function renderWorkbench() {
   const siteName = store.site.site_name || '旅行经费工作台';
   const banner = store.site.announce_text;
-  const curYear = new Date().getFullYear();
   document.getElementById('view').innerHTML = `
     ${banner ? `<div class="banner">${esc(banner)}</div>` : ''}
     <nav class="toolbar">
-      <div class="chip-row" style="flex:1;min-width:100%">
-        <div class="chip ${state.filterYear === 'all' ? 'active' : ''}" data-fy="all">全部</div>
-        ${years().map(y => `<div class="chip ${state.filterYear === y ? 'active' : ''}" data-fy="${y}">${y}</div>`).join('')}
-      </div>
+      <div class="chip-row" id="chipRow" style="flex:1;min-width:100%"></div>
     </nav>
     <div class="toolbar">
       <div class="grow"><input id="search" placeholder="搜索目的地 / 路线名…" value="${esc(state.search)}"></div>
@@ -78,12 +101,20 @@ export function renderWorkbench() {
       <div id="yearTable"></div>
     </div>`;
 
-  document.getElementById('search').oninput = e => { state.search = e.target.value; renderRoutes(); renderStats(); };
+  document.getElementById('search').oninput = e => {
+    state.search = e.target.value;
+    state.page = 1;
+    /* 防抖：避免每次按键都打统计/列表接口（搜索已改为服务端过滤） */
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      loadRoutes().then(() => { renderRoutes(); renderPager(); renderStats(); });
+    }, 300);
+  };
   document.getElementById('hideSeedCb').onchange = e => {
     store.hideSeed = e.target.checked;
     localStorage.setItem('te_hide_seed', store.hideSeed ? '1' : '0');
     state.page = 1;
-    loadRoutes().then(() => { renderRoutes(); renderPager(); renderStats(); });
+    Promise.all([loadRoutes(), loadYears()]).then(() => { renderYearChips(); renderRoutes(); renderPager(); renderStats(); });
   };
   document.getElementById('newRouteBtn').onclick = () => openForm(null);
   document.getElementById('exportBtn').onclick = exportCsv;
@@ -93,30 +124,30 @@ export function renderWorkbench() {
     if (f) importJson(f);
     e.target.value = '';
   };
-  document.querySelectorAll('[data-fy]').forEach(c => {
+  document.getElementById('routeGrid').onclick = onGridClick;
+  renderYearChips();
+  renderRoutes();
+  renderPager();
+}
+
+/* 年份筛选胶囊：基于 state.years（GET /api/routes/years 全量去重），不受分页与 year 过滤影响 */
+function renderYearChips() {
+  const row = document.getElementById('chipRow');
+  if (!row) return;
+  row.innerHTML = `<div class="chip ${state.filterYear === 'all' ? 'active' : ''}" data-fy="all">全部</div>` +
+    years().map(y => `<div class="chip ${state.filterYear === y ? 'active' : ''}" data-fy="${y}">${y}</div>`).join('');
+  row.querySelectorAll('[data-fy]').forEach(c => {
     c.onclick = () => {
       state.filterYear = c.dataset.fy;
       state.page = 1;
-      /* 同步 chip 高亮：renderRoutes 只重绘路线网格，不重渲染 chip 行 */
-      document.querySelectorAll('[data-fy]').forEach(x => x.classList.toggle('active', x === c));
+      row.querySelectorAll('[data-fy]').forEach(x => x.classList.toggle('active', x === c));
       loadRoutes().then(() => { renderRoutes(); renderPager(); renderStats(); });
     };
   });
-  document.getElementById('routeGrid').onclick = onGridClick;
-  renderRoutes();
-  renderPager();
-  void curYear;
 }
 
 function years() {
-  return [...new Set(routes.map(r => r.year))].filter(Boolean).sort((a, b) => b.localeCompare(a));
-}
-
-function visible() {
-  let list = routes.filter(r => state.filterYear === 'all' || r.year === state.filterYear);
-  const q = state.search.trim().toLowerCase();
-  if (q) list = list.filter(r => (r.name + ' ' + (r.dest || '') + ' ' + (r.scenic || '')).toLowerCase().includes(q));
-  return list;
+  return state.years || [];
 }
 
 function miniBar(r) {
@@ -135,7 +166,8 @@ function miniBar(r) {
 
 function renderRoutes() {
   const grid = document.getElementById('routeGrid');
-  const list = visible();
+  /* 列表已由服务端按 year+q 过滤并分页，直接渲染返回结果（与统计口径一致） */
+  const list = routes;
   if (!list.length) {
     grid.innerHTML = '<div class="empty">暂无路线，点「新增路线」开始记录吧 ✈</div>';
     return;
@@ -238,7 +270,7 @@ async function importJson(file) {
     if (res && res.created) {
       const dup = res.duplicates ? '，去重跳过 ' + res.duplicates + ' 条' : '';
       toast('导入完成：新增 ' + res.created + ' 条' + (res.skipped ? '，跳过 ' + res.skipped + ' 条' : '') + dup);
-      await loadRoutes(); renderRoutes(); renderPager(); renderStats();
+      await reloadAfterMutation();
     } else throw new Error((res && res.msg) || '导入失败');
   } catch (e) { toast('导入失败：' + e.message); }
 }
@@ -427,18 +459,13 @@ export function openForm(id) {
   /* AI 按钮：仅当当前用户被启用 AI 功能时显示
    * 启用方式：管理后台 → AI 配置 → 勾选对应用户 → 保存启用用户 */
   const aiBtn = document.getElementById('aiPlanBtn');
-  const aiChatBtn = document.getElementById('aiChatBtn');
   const showAi = !!(store.user && store.user.ai_enabled);
   if (aiBtn) {
     aiBtn.style.display = showAi ? 'inline-flex' : 'none';
     aiBtn.style.visibility = showAi ? 'visible' : 'hidden';
   }
-  if (aiChatBtn) {
-    /* 调整按钮：需要当前已有行程内容才能调整 */
-    const hasScenic = !!(document.getElementById('f_scenic') && document.getElementById('f_scenic').value.trim());
-    aiChatBtn.style.display = (showAi && hasScenic) ? 'inline-flex' : 'none';
-    aiChatBtn.style.visibility = (showAi && hasScenic) ? 'visible' : 'hidden';
-  }
+  /* 「调整」按钮：需已启用 AI 且表单已有行程内容，统一由 syncAiChatBtn 判定 */
+  syncAiChatBtn();
 }
 
 /* AI 行程规划：校验必填项 → 调用接口 → 回填景点路线 */
@@ -466,6 +493,8 @@ async function aiPlanRoute() {
     });
     if (res && res.scenic) {
       document.getElementById('f_scenic').value = res.scenic;
+      /* 回填后表单已有行程内容，立即同步「调整」按钮可见，无需先保存再重开表单 */
+      syncAiChatBtn();
       toast('AI 行程规划完成，已回填到景点路线');
     } else {
       toast('AI 返回内容为空');
@@ -480,12 +509,45 @@ async function aiPlanRoute() {
 
 /* ========== AI 行程对话式调整 ========== */
 
-/* 对话状态 */
+/* 对话状态。会话按「路线 id」暂存（未保存的新路线归入 __new__），
+ * 使关闭面板再打开时可续接上下文；一旦基准行程变化则自动作废重建，避免上下文错位。 */
 const aiChatState = {
-  history: [],       // 对话历史 [{role, content}]
-  lastResult: '',    // 最近一次 AI 返回的行程
+  session: null,     // 当前会话 { baseScenic, history:[{role,content}], lastResult }
   loading: false
 };
+const aiChatSessions = new Map();
+const AI_CHAT_SESSION_MAX = 20;
+
+/* 会话键：已保存路线用其 id，未保存的新路线统一归入 __new__ */
+function aiChatKey() { return state.curId || '__new__'; }
+
+/* 取出（或按当前基准行程新建）会话对象 */
+function getAiChatSession(baseScenic) {
+  const key = aiChatKey();
+  let s = aiChatSessions.get(key);
+  if (!s || s.baseScenic !== baseScenic) {
+    s = { baseScenic, history: [], lastResult: '' };
+    /* 简单容量控制：超出上限时淘汰最早建立的会话，避免长会话下内存无界增长 */
+    if (aiChatSessions.size >= AI_CHAT_SESSION_MAX) {
+      const first = aiChatSessions.keys().next();
+      if (!first.done) aiChatSessions.delete(first.value);
+    }
+    aiChatSessions.set(key, s);
+  }
+  return s;
+}
+
+/* 「调整」按钮显隐：需已启用 AI 且当前表单已有行程内容。
+ * 抽为独立函数，供表单渲染、AI 规划回填、应用调整结果三处复用，避免显隐状态不一致。 */
+function syncAiChatBtn() {
+  const btn = document.getElementById('aiChatBtn');
+  if (!btn) return;
+  const scenicEl = document.getElementById('f_scenic');
+  const hasScenic = !!(scenicEl && scenicEl.value.trim());
+  const show = !!(store.user && store.user.ai_enabled) && hasScenic;
+  btn.style.display = show ? 'inline-flex' : 'none';
+  btn.style.visibility = show ? 'visible' : 'hidden';
+}
 
 /* 打开 AI 对话调整面板 */
 function openAiChat() {
@@ -494,24 +556,30 @@ function openAiChat() {
   const dest = document.getElementById('f_dest').value.trim();
   if (!dest) { toast('请先填写主要目的地'); return; }
 
-  /* 重置对话状态（每次打开面板时重新开始） */
-  aiChatState.history = [];
-  aiChatState.lastResult = '';
+  /* 复用同一路线且基准行程未变的会话，实现关闭后重开续接 */
+  const session = getAiChatSession(scenic);
+  aiChatState.session = session;
   aiChatState.loading = false;
 
   /* 显示当前行程 */
   document.getElementById('aiChatCurrentContent').textContent = scenic;
   document.getElementById('aiChatCurrentContent').style.display = 'none';
 
-  /* 清空对话区域 */
-  document.getElementById('aiChatMessages').innerHTML =
-    '<div style="text-align:center;color:#999;font-size:13px;padding:20px 0">' +
-    '输入调整要求，AI 会基于当前行程进行修改<br>' +
-    '<span style="font-size:12px">例如：把第二天的故宫换成颐和园、增加美食推荐、第一天太赶了精简一下</span>' +
-    '</div>';
+  /* 恢复历史对话；无历史时展示占位提示 */
+  const msgs = document.getElementById('aiChatMessages');
+  msgs.innerHTML = '';
+  if (session.history.length) {
+    session.history.forEach(m => renderAiChatMessage(m.role, m.content));
+  } else {
+    msgs.innerHTML =
+      '<div style="text-align:center;color:#999;font-size:13px;padding:20px 0">' +
+      '输入调整要求，AI 会基于当前行程进行修改<br>' +
+      '<span style="font-size:12px">例如：把第二天的故宫换成颐和园、增加美食推荐、第一天太赶了精简一下</span>' +
+      '</div>';
+  }
 
-  /* 隐藏应用栏、清空输入框 */
-  document.getElementById('aiChatApplyBar').style.display = 'none';
+  /* 有历史结果时同步恢复应用栏，保证续接后可继续落地 */
+  document.getElementById('aiChatApplyBar').style.display = session.lastResult ? 'flex' : 'none';
   document.getElementById('aiChatInput').value = '';
 
   openMask('aiChatMask');
@@ -553,13 +621,15 @@ async function sendAiChatMessage() {
   const endDate = document.getElementById('f_end_date').value;
   const dest = document.getElementById('f_dest').value.trim();
   const days = parseInt(document.getElementById('f_days').value) || 0;
-  /* 当前行程：优先用最近一次 AI 调整结果，否则用表单中的值 */
-  const currentScenic = aiChatState.lastResult || document.getElementById('f_scenic').value.trim();
+  /* 当前行程：优先用本会话最近一次 AI 调整结果，否则用会话基准行程 */
+  const session = aiChatState.session;
+  const currentScenic = (session && session.lastResult) || document.getElementById('f_scenic').value.trim();
 
   if (!startDate || !endDate) { toast('请先选择出行起止日期'); return; }
   if (!dest) { toast('请先填写主要目的地'); return; }
   if (days <= 0) { toast('天数无效，请检查起止日期'); return; }
   if (!currentScenic) { toast('当前行程为空，请先生成或填写行程'); return; }
+  if (!session) { toast('对话未就绪，请重新打开调整面板'); return; }
 
   /* 渲染用户消息 */
   renderAiChatMessage('user', message);
@@ -585,17 +655,17 @@ async function sendAiChatMessage() {
       start_date: startDate,
       end_date: endDate,
       days,
-      history: aiChatState.history
+      history: session.history
     });
 
     /* 移除加载中 */
     loadingDiv.remove();
 
     if (res && res.scenic) {
-      /* 记录对话历史 */
-      aiChatState.history.push({ role: 'user', content: message });
-      aiChatState.history.push({ role: 'assistant', content: res.scenic });
-      aiChatState.lastResult = res.scenic;
+      /* 记录对话历史（写入会话，关闭面板后重开可续接） */
+      session.history.push({ role: 'user', content: message });
+      session.history.push({ role: 'assistant', content: res.scenic });
+      session.lastResult = res.scenic;
 
       /* 渲染 AI 回复 */
       renderAiChatMessage('assistant', res.scenic);
@@ -617,16 +687,15 @@ async function sendAiChatMessage() {
 
 /* 应用调整后的行程到表单 */
 function applyAiChatResult() {
-  if (!aiChatState.lastResult) { toast('没有可应用的行程'); return; }
-  document.getElementById('f_scenic').value = aiChatState.lastResult;
+  const session = aiChatState.session;
+  if (!session || !session.lastResult) { toast('没有可应用的行程'); return; }
+  document.getElementById('f_scenic').value = session.lastResult;
+  /* 表单内容已成为新的基准行程：同步会话基准，避免下次打开被视为「基准变化」而丢弃历史 */
+  session.baseScenic = session.lastResult;
   closeMask('aiChatMask');
   toast('已应用调整后的行程');
-  /* 应用后更新调整按钮的显示状态（现在有内容了） */
-  const aiChatBtn = document.getElementById('aiChatBtn');
-  if (aiChatBtn && store.user && store.user.ai_enabled) {
-    aiChatBtn.style.display = 'inline-flex';
-    aiChatBtn.style.visibility = 'visible';
-  }
+  /* 应用后表单已有行程内容，同步「调整」按钮为可见 */
+  syncAiChatBtn();
 }
 
 /* ========== AI 行程对话式调整 END ========== */
@@ -660,10 +729,7 @@ async function saveForm() {
     if (state.curId) { await api.put('/routes/' + encodeURIComponent(state.curId), obj); toast('已保存'); }
     else { await api.post('/routes', obj); toast('已新增路线'); }
     closeMask('formMask');
-    await loadRoutes();
-    renderRoutes();
-    renderPager();
-    renderStats();
+    await reloadAfterMutation();
   } catch (e) { toast(e.message); }
 }
 
@@ -673,10 +739,7 @@ async function deleteRoute(id) {
     await api.del('/routes/' + encodeURIComponent(id));
     toast('已删除');
     closeMask('formMask');
-    await loadRoutes();
-    renderRoutes();
-    renderPager();
-    renderStats();
+    await reloadAfterMutation();
   } catch (e) { toast(e.message); }
 }
 
@@ -787,6 +850,9 @@ export function bindFormEvents() {
   /* 日期变化自动计算天数 */
   document.getElementById('f_start_date').addEventListener('change', onDateChange);
   document.getElementById('f_end_date').addEventListener('change', onDateChange);
+  /* 行程内容手动编辑时同步「调整」按钮显隐（有内容才可调整） */
+  const scenicInput = document.getElementById('f_scenic');
+  if (scenicInput) scenicInput.addEventListener('input', syncAiChatBtn);
   /* AI 规划按钮 */
   const aiBtn = document.getElementById('aiPlanBtn');
   if (aiBtn) aiBtn.onclick = aiPlanRoute;

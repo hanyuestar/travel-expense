@@ -1,7 +1,7 @@
 /* main.js — 入口：hash 路由 + 守卫 + 全局事件（ES Module） */
 import { store, toast, api, navigate, fetchMe, applyAuth, renderHeader, getServerUrl, setServerUrl, HAS_BUILTIN_SERVER, esc } from './api.js';
 import { initAuth, renderLogin, renderRegister } from './auth.js';
-import { loadRoutes, renderWorkbench, renderStats, renderProfile, bindFormEvents } from './app.js';
+import { loadRoutes, loadYears, renderWorkbench, renderStats, renderProfile, bindFormEvents } from './app.js';
 import { renderAdmin, bindAdminEvents } from './admin.js';
 
 async function guard() {
@@ -66,8 +66,8 @@ async function render() {
   if (route.startsWith('#/profile')) { renderProfile(); return; }
   if (route.startsWith('#/admin')) { renderAdmin(); return; }
 
-  /* 默认工作台 */
-  await loadRoutes();
+  /* 默认工作台：年份胶囊依赖全量年份接口，与列表并行拉取 */
+  await Promise.all([loadRoutes(), loadYears()]);
   renderWorkbench();
   renderStats();
 }
