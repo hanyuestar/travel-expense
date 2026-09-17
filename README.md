@@ -323,6 +323,7 @@ travel-expense/
 │   └── README.md                      # 构建与「WebView 第三方 Cookie」必改项说明
 ├── tests/                             # 回归 + 冒烟测试（run-all.js 一键全跑）
 ├── demo/index.html                    # 纯前端演示（单用户，数据存浏览器）
+├── deliverables/                      # 版本发布说明 / 验证报告 / 冒烟脚本存档
 ├── data/                              # 运行时卷：app.db + 种子 routes.json（gitignore）
 └── README.md
 ```
