@@ -38,6 +38,11 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # 必须显式覆盖默认值。该 action 默认 packages 为 "tools platform-tools"，
+          # 但旧版 `tools` 包已被 Google 从 SDK 仓库下线，sdkmanager 会报
+          # "Failed to find package 'tools'" 并以退出码 1 中断整个任务。
+          packages: 'platform-tools'
 
       - name: Install SDK packages
         run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
