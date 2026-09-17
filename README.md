@@ -286,7 +286,8 @@ node tests/run-all.js                    # 在仓库根目录执行：一条命�
 travel-expense/
 ├── .github/workflows/
 │   ├── docker-image.yml               # 单镜像双注册表自动发布（amd64+arm64）
-│   └── ci.yml                         # 测试 CI（Node 18/20/22）
+│   ├── ci.yml                         # 测试 CI（Node 18/20/22）
+│   └── build-android.yml              # 手动触发：构建安卓 APK 并上传到指定 Release
 ├── Dockerfile                         # 全栈单镜像（node 后端 + 内置前端静态）
 ├── docker-entrypoint.sh               # 容器入口（种子兜底 + 启动后端）
 ├── docker-compose.yml                 # 单服务编排（复制即可用）
@@ -298,6 +299,7 @@ travel-expense/
 │   ├── auth.js                        # 注册/登录/会话/封禁/改密（CSPRNG 验证码）
 │   ├── routes_api.js                  # 路线 CRUD（owner 隔离）+ 统计 + 导出导入 + 分享令牌
 │   ├── admin_api.js                   # 管理后台接口（含全站导出 / 数据库备份）
+│   ├── ai_service.js                  # AI 行程规划服务（OpenAI 兼容接口；测连/生成/调整行程）
 │   ├── mailer.js                      # nodemailer SMTP 发码/测试邮件
 │   ├── fx.js                          # 多币种换算（静态汇率兜底 + 可选实时源）
 │   ├── csv.js                         # 轻量 CSV 序列化（零依赖）
@@ -311,10 +313,12 @@ travel-expense/
 │       ├── auth.js                    # 登录/注册页
 │       ├── app.js                     # 工作台（列表/统计/表单/个人中心/分享）
 │       ├── admin.js                   # 管理后台 6 页
-│       └── charts.js                  # 手写 SVG 环形图/柱状图（本位币）
+│       ├── charts.js                  # 手写 SVG 环形图/柱状图（本位币）
+│       └── html2canvas.min.js         # 分享页导出图片（v1.0.8 起，vendored）
 ├── android-app/                       # 安卓客户端工程（Capacitor 原生壳，webDir→public/）
 │   ├── capacitor.config.js            # 打包配置（appId / appName / webDir）
 │   ├── scripts/inject-server.mjs      # 构建时注入内置服务器地址（读取 .te-server-url，不入库）
+│   ├── scripts/patch-native.mjs       # 注入原生定制（第三方 Cookie 放行 + 按主机放行 SSL）
 │   ├── .te-server-url.example         # 服务器地址模板（复制为 .te-server-url 填入你的地址）
 │   └── README.md                      # 构建与「WebView 第三方 Cookie」必改项说明
 ├── tests/                             # 回归 + 冒烟测试（run-all.js 一键全跑）
