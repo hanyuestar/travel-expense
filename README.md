@@ -40,7 +40,7 @@
 ## 📌 版本变更记录
 
 ### v1.0.9（2026-09-17）
-缺陷修复与体验优化（向后兼容 v1.0.8 数据，无需迁移；Docker 镜像待随版本发布）：
+缺陷修复与体验优化（向后兼容 v1.0.8 数据，无需迁移）：
 - **年份筛选更完整**：年份选项不再受分页限制，出行记录跨年较多时也能一次选全；新导入的年份会自动出现在筛选栏。
 - **列表与统计口径统一**：按年份或关键字筛选后，统计卡片（出行次数 / 总花费 / 总天数等）与下方列表严格对应，不再出现「列表只有 1 条、统计却按全部计算」的偏差。
 - **搜索更跟手**：输入时不再逐字请求，停止输入后自动查询；支持按路线名 / 目的地 / 景点匹配，与统计同步收窄。
@@ -102,7 +102,7 @@ mkdir -p /volume1/docker/travel
 cd /volume1/docker/travel
 curl -O https://raw.githubusercontent.com/hanyuestar/travel-expense/main/docker-compose.yml
 
-# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.8）
+# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.9）
 docker compose up -d
 
 # 3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
@@ -113,7 +113,7 @@ docker compose up -d
 ```yaml
 services:
   travel-expense:
-    image: ghcr.io/hanyuestar/travel-expense:v1.0.8
+    image: ghcr.io/hanyuestar/travel-expense:v1.0.9
     container_name: travel-expense
     restart: unless-stopped
     ports:
@@ -148,7 +148,7 @@ docker run -d --name travel-expense \
   -p 8108:3000 \
   -v /your/path/data:/data \
   --restart unless-stopped \
-  ghcr.io/hanyuestar/travel-expense:v1.0.8
+  ghcr.io/hanyuestar/travel-expense:v1.0.9
 ```
 
 ### 方式 C：手动运行（无 Docker，需 Node 18+）
@@ -266,8 +266,10 @@ node tests/run-all.js                    # 在仓库根目录执行：一条命�
 1. ghcr 发布无需配置（自动注入 `GITHUB_TOKEN`）；Docker Hub 需配置 Secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（未配置则自动跳过 Docker Hub，不影响 ghcr）。
 2. 打版本 tag 并推送即触发构建（linux/amd64 + arm64 双架构）：
    ```bash
-   git tag -a v1.0.8 -m "v1.0.8 single-image"
-   git push origin main --tags
+   git tag -a v1.0.9 -m "v1.0.9 single-image"
+   git push origin v1.0.9     # 只推当前版本 tag
+   # ⚠️ 切勿用 git push --tags：本地历史 tag 会被一并推送并各自触发构建，
+   #    多个构建并发会争抢 latest，导致 latest 指向旧版本（v1.0.2 曾踩此坑）
    ```
 3. 镜像推送到：
    - `ghcr.io/hanyuestar/travel-expense`（必推）
