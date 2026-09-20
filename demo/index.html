@@ -719,7 +719,8 @@ async function deleteRoute(id){
 /* ---------- detail（概览 / 流水 / 结算） ---------- */
 function openDetail(id){
   const r=routes.find(x=>x.id===id);if(!r)return;state.curId=id;
-  if(!state.detailTab)state.detailTab="overview";
+  /* 打开新路线的详情统一回到「概览」（与正式版一致） */
+  state.detailTab="overview";
   document.getElementById("d_name").textContent=r.name;
   paintDetailTabs();
   renderDetailTab();
@@ -744,9 +745,10 @@ function renderDetailTab(){
     renderOverview(r,body);
     return;
   }
-  acts.innerHTML='<button class="btn" id="d_ledgerTv">同行人</button><button class="btn btn-primary" id="d_ledgerAdd">＋ 记一笔</button>';
+  acts.innerHTML='<button class="btn" id="d_ledgerTv">同行人</button><button class="btn btn-primary" id="d_ledgerAdd">＋ 记一笔</button><button class="btn" data-close="detailMask">关闭</button>';
   document.getElementById("d_ledgerTv").onclick=()=>openTravelersSheet(r.id);
   document.getElementById("d_ledgerAdd").onclick=()=>openExpenseSheet(r.id,null);
+  acts.querySelectorAll("[data-close]").forEach(b=>{b.onclick=()=>closeMask(b.dataset.close);});
   if(state.detailTab==="ledger")renderLedger(r,body);
   else renderSettle(r,body);
 }

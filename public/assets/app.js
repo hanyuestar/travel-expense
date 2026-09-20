@@ -1,5 +1,5 @@
 /* app.js — 工作台（路线列表 + 年度统计 + 路线表单 + 个人中心） */
-import { store, toast, api, navigate, esc, fmt, fmtMoney, CATS, parseStart, fmtTime } from './api.js';
+import { store, toast, api, navigate, esc, fmt, fmtMoney, CATS, parseStart, parseDatesFromRange, fmtTime } from './api.js';
 import { COLORS, totalOf, donut, trendBar } from './charts.js';
 import * as ledger from './ledger.js';
 
@@ -54,15 +54,15 @@ async function reloadAfterMutation() {
   renderRoutes();
   renderPager();
   renderStats();
-  /* 详情弹层若开着，同步刷新当前页签：
-   * 流水变化会改写 9 类聚合值，概览页的金额/占比必须跟着更新 */
+  /* 详情弹层若开着，同步刷新当前页签（概览/流水/结算一视同仁）：
+   * 流水变化会改写 9 类聚合值，同行人变化会影响结算 —— 任何页签都不应停留在旧数据 */
   if (document.getElementById('detailMask') &&
       document.getElementById('detailMask').classList.contains('open') &&
       state.detailId) {
     const still = routes.find(x => x.id === state.detailId);
     if (still) {
       document.getElementById('d_name').textContent = still.name;
-      if (state.detailTab === 'overview') renderDetailTab();
+      renderDetailTab();
     }
   }
 }
@@ -170,7 +170,7 @@ function miniBar(r) {
     const v = parseFloat(r.exp[c]) || 0;
     if (v > 0) {
       const pct = (v / t * 100).toFixed(1);
-      s += `<span style="width:${pct}%;background:${COLORS[c]}" title="${c} ${fmt(v)}"></span>`;
+      s += `<span style="width:${pct}%;background:${COLORS[c]}" title="${c} ${fmtMoney(v, r.currency)}"></span>`;
     }
   });
   return s + '</div>';
@@ -211,10 +211,14 @@ function renderRoutes() {
   }).join('');
 }
 
+/* 人均口径（与流水页一致，唯一规则）：同行人名单优先，名单为空回退路线登记人数。
+ * traveler_count 由列表接口按路线分组下发（与 expense_count 同机制）。
+ * 不做取整：显示层交给 fmtMoney（与流水页「总额÷名单」的显示完全一致）。 */
 function perOf(r) {
   const t = totalOf(r);
-  const p = parseFloat(r.people) || 0;
-  return p > 0 ? Math.round(t / p) : null;
+  const tc = parseInt(r.traveler_count, 10) || 0;
+  const p = tc > 0 ? tc : (parseFloat(r.people) || 0);
+  return p > 0 ? t / p : null;
 }
 
 /* 分页控件：与管理端分页风格一致，仅当总数超过单页时显示 */
@@ -390,35 +394,6 @@ function buildDateRangeText(start, end) {
   };
   if (start && end && start !== end) return `${fmt(start)} - ${fmt(end)}`;
   return fmt(start || end);
-}
-/* 从旧的 daterange 文本解析出起止日期（兼容老数据） */
-function parseDatesFromRange(dr, year) {
-  if (!dr) return { start: '', end: '' };
-  let m = dr.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})\s*[-—~]\s*(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
-  if (m) return {
-    start: `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`,
-    end: `${m[4]}-${String(m[5]).padStart(2,'0')}-${String(m[6]).padStart(2,'0')}`
-  };
-  m = dr.match(/(\d{1,2})[\/\-.](\d{1,2})\s*[-—~]\s*(\d{1,2})[\/\-.](\d{1,2})/);
-  if (m && year) {
-    const sm = +m[1], em = +m[3];
-    const ey = em < sm ? +year + 1 : +year;
-    return {
-      start: `${year}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`,
-      end: `${ey}-${String(m[3]).padStart(2,'0')}-${String(m[4]).padStart(2,'0')}`
-    };
-  }
-  m = dr.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
-  if (m) {
-    const d = `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
-    return { start: d, end: d };
-  }
-  m = dr.match(/(\d{1,2})[\/\-.](\d{1,2})/);
-  if (m && year) {
-    const d = `${year}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
-    return { start: d, end: d };
-  }
-  return { start: '', end: '' };
 }
 
 /* ---------- 表单 ---------- */
@@ -845,7 +820,8 @@ export function openDetail(id) {
   const r = routes.find(x => x.id === id);
   if (!r) { toast('路线不存在'); return; }
   state.detailId = id;
-  if (!state.detailTab) state.detailTab = 'overview';
+  /* 打开新路线的详情统一回到「概览」；「去记流水」等内部跳转仍显式指定页签 */
+  state.detailTab = 'overview';
   openMask('detailMask');
   document.getElementById('d_name').textContent = r.name;
   paintDetailTabs();
@@ -890,7 +866,9 @@ function renderDetailTab() {
   }
 
   acts.innerHTML = `<button class="btn" id="d_ledgerTv">同行人</button>
-    ${seedOnly ? '' : '<button class="btn btn-primary" id="d_ledgerAdd">＋ 记一笔</button>'}`;
+    ${seedOnly ? '' : '<button class="btn btn-primary" id="d_ledgerAdd">＋ 记一笔</button>'}
+    <button class="btn" data-close="detailMask">关闭</button>`;
+  acts.querySelectorAll('[data-close]').forEach(b => { b.onclick = () => closeMask(b.dataset.close); });
   const tv = document.getElementById('d_ledgerTv');
   if (tv) tv.onclick = () => ledger.openTravelersSheet(r, reloadAfterMutation);
   const ad = document.getElementById('d_ledgerAdd');
@@ -1014,8 +992,6 @@ export function bindFormEvents() {
   /* 详情的三个页签与底部按钮由 renderDetailTab() 动态生成，编辑入口在开放时绑定 */
   document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => closeMask(b.dataset.close));
   document.querySelectorAll('.mask').forEach(m => m.onclick = e => { if (e.target === m) closeMask(m.id); });
-  /* 流水 / 同行人弹层的静态事件（模块内部一次性绑定） */
-  ledger.initLedgerModule();
   /* 日期变化自动计算天数 */
   document.getElementById('f_start_date').addEventListener('change', onDateChange);
   document.getElementById('f_end_date').addEventListener('change', onDateChange);

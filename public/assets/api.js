@@ -141,11 +141,13 @@ export function currentRoute() {
 export function esc(s) {
   return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
-export function fmt(n) {
-  n = Math.round((n || 0) * 100) / 100;
+/* 金额格式化：dec 指定小数位（默认 2），尾零自动省略。
+ * 零小数币种（日元/韩元等）由 fmtMoney 传 dec=0。 */
+export function fmt(n, dec = 2) {
+  const p = Math.pow(10, dec);
+  n = Math.round((n || 0) * p) / p;
   return n.toLocaleString('zh-CN');
 }
-export function addYen(n) { return '¥' + fmt(n); }
 
 /* 9 类支出分类：前端唯一来源（服务端对应 db.js 的 EXP_KEYS，需保持同步） */
 export const CATS = ['交通', '机票', '高铁', '住宿', '餐饮', '门票', '团费', '购物', '其他'];
@@ -156,14 +158,48 @@ export function curSymbol(c) {
   const sym = store.site.currency_symbols;
   return (sym && sym[(c || 'CNY').toUpperCase()]) || (c || 'CNY');
 }
-export function fmtMoney(n, cur) { return curSymbol(cur) + fmt(n); }
-export function parseStart(dr, year) {
-  if (!dr) return null;
-  let m = dr.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
-  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+/** 零小数币种（兑现「日元/韩元金额无小数」的文档承诺）：按币种取 decimals */
+const ZERO_DECIMAL_CUR = { JPY: 1, KRW: 1, VND: 1, IDR: 1 };
+export function fmtMoney(n, cur) {
+  const code = (cur || 'CNY').toUpperCase();
+  return curSymbol(code) + fmt(n, ZERO_DECIMAL_CUR[code] ? 0 : 2);
+}
+/* 自由文本日期区间解析（前端唯一实现）：返回 {start, end} 的 YYYY-MM-DD 字符串。
+ * 支持：完整日期区间 / 月日区间（跨年自动 +1）/ 单个完整日期 / 单个月日（需 year）。
+ * 排序用起点（parseStart）与本函数同源，避免两套正则漂移。 */
+export function parseDatesFromRange(dr, year) {
+  if (!dr) return { start: '', end: '' };
+  let m = dr.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})\s*[-—~]\s*(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (m) return {
+    start: `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`,
+    end: `${m[4]}-${String(m[5]).padStart(2, '0')}-${String(m[6]).padStart(2, '0')}`
+  };
+  m = dr.match(/(\d{1,2})[\/\-.](\d{1,2})\s*[-—~]\s*(\d{1,2})[\/\-.](\d{1,2})/);
+  if (m && year) {
+    const sm = +m[1], em = +m[3];
+    const ey = em < sm ? +year + 1 : +year;
+    return {
+      start: `${year}-${String(m[1]).padStart(2, '0')}-${String(m[2]).padStart(2, '0')}`,
+      end: `${ey}-${String(m[3]).padStart(2, '0')}-${String(m[4]).padStart(2, '0')}`
+    };
+  }
+  m = dr.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (m) {
+    const d = `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+    return { start: d, end: d };
+  }
   m = dr.match(/(\d{1,2})[\/\-.](\d{1,2})/);
-  if (m && year) return new Date(+year, +m[1] - 1, +m[2]);
-  return null;
+  if (m && year) {
+    const d = `${year}-${String(m[1]).padStart(2, '0')}-${String(m[2]).padStart(2, '0')}`;
+    return { start: d, end: d };
+  }
+  return { start: '', end: '' };
+}
+
+/* 排序用起始时间：parseDatesFromRange 的起点（同源实现） */
+export function parseStart(dr, year) {
+  const r = parseDatesFromRange(dr, year);
+  return r.start ? new Date(r.start + 'T00:00:00') : null;
 }
 export function fmtTime(ms) {
   if (!ms) return '—';

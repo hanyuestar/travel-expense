@@ -9,9 +9,9 @@
  *   · 存在后端的金额一律为**路线币种**金额，前端不做换算
  */
 import { api, store, toast, esc, fmt, fmtMoney, curSymbol, CATS } from './api.js';
-import { COLORS } from './charts.js';
+import { COLORS, totalOf } from './charts.js';
 
-/* 同行人头像配色：复用 styles.css 中既有的 --c0…--c8（原本定义但未被使用） */
+/* 同行人头像配色（唯一来源）：与 9 类花费配色（charts.COLORS）语义不同，独立维护 */
 const TV_COLORS = ['#60a5fa', '#3b82f6', '#06b6d4', '#f59e0b', '#ef6b5e', '#a78bfa', '#ec4899', '#fb923c', '#94a3b8'];
 const QUICK_AMOUNTS = [50, 100, 200, 500, 1000];
 
@@ -19,11 +19,12 @@ const st = {
   route: null,          /* 当前路线 */
   list: [],             /* 当前流水列表（服务端筛选后） */
   summary: null,        /* 列表汇总 {total, amount, byCategory} */
-  travelers: [],        /* 同行人名单 */
+  travelers: [],        /* 当前路线的同行人名单（每次进入页签强制按路线重载，防跨路线串线） */
+  tvReadOnly: false,    /* 示例路线对普通用户只读（隐藏添加/改名/标记/移除） */
   catFilter: '全部',
   editingId: null,      /* 正在编辑的流水 id（null=新增） */
   draft: null,          /* 记一笔草稿 */
-  onChanged: null       /* 流水变化后的回调（刷新卡片/统计） */
+  onChanged: null       /* 流水变化后的回调（刷新卡片/统计/详情页签） */
 };
 
 /* ---------- 小工具 ---------- */
@@ -35,7 +36,6 @@ function tvColor(t) {
 }
 function initial(name) { return String(name || '?').replace(/^我（|）$/g, '').slice(0, 1); }
 function findTraveler(id) { return st.travelers.find(t => t.id === id) || null; }
-function emptyDays() { return {}; }
 
 /* 人均分母：优先同行人名单，名单为空回退路线登记人数 */
 function headcount() {
@@ -61,15 +61,14 @@ export async function loadExpenses(route, catFilter) {
   return st;
 }
 
-export function expHeadcount() { return headcount(); }
-
 /* ---------- 流水页签 ---------- */
 export async function renderLedgerTab(container, route, onChanged) {
   st.route = route;
   st.onChanged = onChanged || null;
   container.innerHTML = '<div class="empty">加载流水…</div>';
   try {
-    if (!st.travelers.length) await loadTravelers(route);
+    /* 必须按当前路线强制加载同行人：名单是模块级状态，条件加载会导致跨路线串线 */
+    await loadTravelers(route);
     await loadExpenses(route);
   } catch (e) {
     container.innerHTML = '<div class="empty">流水加载失败：' + esc(e.message) + '</div>';
@@ -98,7 +97,7 @@ function paintLedger(container) {
 
   h += `<div class="panel" style="box-shadow:none;padding:12px;margin-bottom:12px">
     <div class="kv"><span class="k">${st.catFilter === '全部' ? '全部流水' : st.catFilter + '（筛选）'}</span><span class="v">${n} 笔 · ${fmtMoney(total, cur)}</span></div>
-    <div class="kv"><span class="k">路线总花费 / 人均</span><span class="v">${fmtMoney(routeTotal(route), cur)}${hc > 0 ? ' · 人均 ' + fmtMoney(routeTotal(route) / hc, cur) : ''}</span></div>
+    <div class="kv"><span class="k">路线总花费 / 人均</span><span class="v">${fmtMoney(totalOf(route), cur)}${hc > 0 ? ' · 人均 ' + fmtMoney(totalOf(route) / hc, cur) : ''}</span></div>
   </div>`;
 
   if (!n) {
@@ -111,7 +110,7 @@ function paintLedger(container) {
   }
 
   /* 按日期倒序分组，组头显示当日小计 */
-  const days = emptyDays();
+  const days = {};
   st.list.forEach(e => { const k = e.spent_on || '__none__'; (days[k] || (days[k] = [])).push(e); });
   Object.keys(days).sort((a, b) => (a === '__none__' ? '' : a) < (b === '__none__' ? '' : b) ? 1 : -1).forEach(day => {
     const sum = days[day].reduce((s, e) => s + (e.amount || 0), 0);
@@ -146,10 +145,6 @@ function ledgerRow(e, cur) {
   </div>`;
 }
 
-/* 路线总花费：由 9 类聚合得出（服务端已按流水汇总），避免依赖当前筛选结果 */
-function routeTotal(route) {
-  return CATS.reduce((s, c) => s + (parseFloat((route.exp || {})[c]) || 0), 0);
-}
 
 function bindLedger(container, hasRows) {
   const add = container.querySelector('#lgAdd') || container.querySelector('#lgAdd2');
@@ -230,8 +225,7 @@ export async function renderSettleTab(container, route, onChanged) {
   container.innerHTML = h;
   const a = container.querySelector('#stTravelers');
   if (a) a.onclick = () => openTravelersSheet(route, onChanged);
-  const b = container.querySelector('#stGoLedger');
-  if (b) b.onclick = () => { const ev = new CustomEvent('te:goto-ledger'); container.dispatchEvent(ev); };
+  /* 「去记流水」的跳转由 app.js 在 renderSettleTab 完成后统一绑定（需操作详情页签状态） */
 }
 
 /* 口径说明：未指定付款人 / 未纳入分摊的金额必须显式告知，否则数字对不上会让人困惑 */
@@ -243,13 +237,15 @@ function caliberNote(sum, cur) {
 }
 
 /* ---------- 记一笔 ---------- */
-export function openExpenseSheet(route, expenseId, onChanged) {
+export async function openExpenseSheet(route, expenseId, onChanged) {
+  st.route = route;
+  st.onChanged = onChanged || null;
+  /* 强制按本路线加载同行人：st.travelers 是模块级状态，直接用会跨路线串线 */
+  try { await loadTravelers(route); } catch (e) { return toast('加载失败：' + e.message); }
   if (!st.travelers.length && !(parseInt(route.people, 10) > 0)) {
     toast('请先添加同行人');
     return openTravelersSheet(route, onChanged);
   }
-  st.route = route;
-  st.onChanged = onChanged || null;
   const cur = route.currency || 'CNY';
   const editing = expenseId ? st.list.find(x => x.id === expenseId) : null;
   st.editingId = editing ? editing.id : null;
@@ -415,15 +411,10 @@ async function deleteExpense() {
   await refreshAfterChange();
 }
 
-/* 流水变化后：重载当前页签 + 通知外层刷新卡片与统计 */
+/* 流水变化后：通知外层统一刷新。
+ * 页签重渲染由 app.js 的 reloadAfterMutation 按当前页签全量完成（此处不再手动 paintLedger，
+ * 避免用 st.route 的旧聚合值画出一帧滞后数据） */
 async function refreshAfterChange() {
-  const box = document.getElementById('d_body');
-  if (box && st.route) {
-    try {
-      await loadExpenses(st.route);
-      paintLedger(box);
-    } catch (e) { /* 忽略：外层仍会刷新列表 */ }
-  }
   if (typeof st.onChanged === 'function') await st.onChanged();
 }
 
@@ -431,6 +422,8 @@ async function refreshAfterChange() {
 export async function openTravelersSheet(route, onChanged) {
   st.route = route;
   st.onChanged = onChanged || null;
+  /* 示例路线对普通用户只读：名单可看，添加/改名/标记/移除隐藏（服务端同样 403，这里提前收敛） */
+  st.tvReadOnly = !!(route.is_seed && store.user && store.user.role !== 'admin');
   try { await loadTravelers(route); } catch (e) { return toast('加载失败：' + e.message); }
   paintTravelers();
   maskOpen('tvMask');
@@ -443,13 +436,17 @@ function paintTravelers() {
   const el = (id) => document.getElementById(id);
   el('t_people').textContent = people ? people + ' 人' : '未填写';
   el('t_count').textContent = ts.length + ' 人' + (people && ts.length && people !== ts.length ? '（与人数不一致）' : '');
+  const ro = st.tvReadOnly;
+  /* 只读态：隐藏批量添加输入区（HTML 里整块控制） */
+  const addField = document.querySelector('#tvMask .field:has(#t_new)');
+  if (addField) addField.style.display = ro ? 'none' : '';
   el('t_list').innerHTML = ts.length ? ts.map(t => `<div class="tv-item">
       <span class="tv" style="background:${tvColor(t)}">${esc(initial(t.name))}</span>
       <span class="tv-name">${esc(t.name)}${t.is_self ? ' <span class="pill pill-user">我</span>' : ''}</span>
-      <button class="btn btn-sm" data-edit="${esc(t.id)}">改</button>
+      ${ro ? '' : `<button class="btn btn-sm" data-edit="${esc(t.id)}">改</button>
       ${t.is_self ? '' : `<button class="btn btn-sm" data-self="${esc(t.id)}">设为我</button>`}
-      <button class="btn btn-sm btn-danger" data-del="${esc(t.id)}">移除</button>
-    </div>`).join('') : '<div class="empty">还没有同行人</div>';
+      <button class="btn btn-sm btn-danger" data-del="${esc(t.id)}">移除</button>`}
+    </div>`).join('') : (ro ? '<div class="empty">该示例路线暂无同行人</div>' : '<div class="empty">还没有同行人</div>');
 
   document.querySelectorAll('#t_list [data-edit]').forEach(b => {
     b.onclick = async () => {
@@ -510,13 +507,3 @@ function paintTravelers() {
   };
 }
 
-/* 静态弹层的关闭按钮（在模块初次加载时绑定一次） */
-export function initLedgerModule() {
-  document.querySelectorAll('#expMask [data-close], #tvMask [data-close]').forEach(b => {
-    b.onclick = () => maskClose(b.dataset.close);
-  });
-  ['expMask', 'tvMask'].forEach(id => {
-    const m = document.getElementById(id);
-    if (m) m.onclick = (e) => { if (e.target === m) maskClose(id); };
-  });
-}

@@ -65,6 +65,15 @@ function expenseCounts(ids) {
     .all(...ids).forEach(r => { out[r.route_id] = r.c; });
   return out;
 }
+/* 同行人计数：与人均口径统一（名单优先、人数兜底）配套，卡片人均按此计算 */
+function travelerCounts(ids) {
+  const out = {};
+  if (!ids.length) return out;
+  const ph = ids.map(() => '?').join(',');
+  db().prepare(`SELECT route_id, COUNT(*) AS c FROM travelers WHERE route_id IN (${ph}) GROUP BY route_id`)
+    .all(...ids).forEach(r => { out[r.route_id] = r.c; });
+  return out;
+}
 
 /* 全量去重年份（不受 year 过滤，确保年份胶囊完整）；hideSeed 时排除种子路线年份 */
 function routesYears(res, userId, query) {
@@ -175,8 +184,12 @@ async function handle(req, res, url, body) {
     /* 附上流水笔数（列表卡片徽标用），一次分组查询避免 N+1 */
     const ids = rows.map(r => r.id);
     const counts = expenseCounts(ids);
+    const tcounts = travelerCounts(ids);
     return ok(res, {
-      list: rows.map(r => Object.assign(dbModule.routeToJson(r), { expense_count: counts[r.id] || 0 })),
+      list: rows.map(r => Object.assign(dbModule.routeToJson(r), {
+        expense_count: counts[r.id] || 0,
+        traveler_count: tcounts[r.id] || 0
+      })),
       total, page, pageSize
     });
   }

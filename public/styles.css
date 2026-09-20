@@ -4,8 +4,6 @@
   --accent:#38bdf8; --bg:#f3fbf9; --card:#ffffff; --line:#e3efeb;
   --text:#1f2d2b; --muted:#6b7d79; --danger:#e2553b; --warn:#e8a33d;
   --shadow:0 4px 18px rgba(20,90,75,.08);
-  --c0:#60a5fa; --c1:#3b82f6; --c2:#06b6d4; --c3:#f59e0b; --c4:#ef6b5e;
-  --c5:#a78bfa; --c6:#ec4899; --c7:#fb923c; --c8:#94a3b8;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}

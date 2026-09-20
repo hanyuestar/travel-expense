@@ -767,10 +767,6 @@ function settle(routeId) {
 }
 
 /* 某路线的流水笔数与结算概览（列表页卡片用，避免逐条查询） */
-function ledgerStat(routeId) {
-  const r = db.prepare('SELECT COUNT(*) AS c, COALESCE(SUM(amount),0) AS s FROM expenses WHERE route_id = ?').get(routeId);
-  return { expense_count: r.c, expense_total: round2(r.s) };
-}
 
 module.exports = {
   initDb, get db() { return db; },
@@ -784,6 +780,6 @@ module.exports = {
   recomputeRouteAgg, migrateAggregatesToOpening,
   listTravelers, findTraveler, addTravelers, updateTraveler, deleteTraveler, travelerUsage,
   insertExpense, updateExpense, deleteExpense, bulkDeleteExpenses, listExpenses, getExpense,
-  settle, ledgerStat,
+  settle,
   round2
 };
