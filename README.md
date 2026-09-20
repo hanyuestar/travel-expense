@@ -33,29 +33,30 @@
 ## 🖼 界面速览
 
 > 以下均为**实机截图**（截图数据为内置示例路线，非真实用户数据）。
+> 图片经 jsDelivr CDN 提供；源文件在本仓库 `screenshots/` 目录。
 
 ### 逐笔消费流水
 
 | 工作台 | 逐笔流水 |
 |---|---|
-| ![工作台](screenshots/01-workbench.png) | ![逐笔流水](screenshots/02-ledger.png) |
+| ![工作台](https://cdn.jsdelivr.net/gh/hanyuestar/travel-expense@main/screenshots/01-workbench.png) | ![逐笔流水](https://cdn.jsdelivr.net/gh/hanyuestar/travel-expense@main/screenshots/02-ledger.png) |
 | 路线卡片显示**「流水 N 笔」**徽标与**「＋ 记一笔」**直达入口；统计卡含总花费 / 出行次数 / 次均花费 / 总天数（未设预算时显示「未设置 / —」） | 台账式流水：**按日期倒序分组**（组头为当日小计）、按 9 类筛选（胶囊只列出实际用到的类目）；历史数据以「期初（历史数据）」承载，并标注**「期初结转 · 不参与分摊」** |
 
 | 记一笔 | AA 结算 |
 |---|---|
-| ![记一笔](screenshots/03-add-expense.png) | ![AA 结算](screenshots/04-settle.png) |
+| ![记一笔](https://cdn.jsdelivr.net/gh/hanyuestar/travel-expense@main/screenshots/03-add-expense.png) | ![AA 结算](https://cdn.jsdelivr.net/gh/hanyuestar/travel-expense@main/screenshots/04-settle.png) |
 | 金额大号输入 + 快捷金额；选类目、**谁付的钱**、**谁参与分摊**；底部实时显示「**N 人平分，每人 ¥X · 由 XX 垫付**」；未选分摊人时给出橙色告警（该笔仅记录实付） | 三页签（概览 / 流水 / 结算）中的结算页：每人**实付 / 应负担 / 差额**（绿为应收、红为应付）+ **最少转账方案**（本例 4 人 → 3 笔，等于人数 − 1）；底部口径说明「未指定付款人（含历史期初数据）不参与结算」 |
 
 ### 同行人 · 路线表单 · AI 规划
 
 | 同行人管理 | 路线表单 |
 |---|---|
-| ![同行人管理](screenshots/05-travelers.png) | ![路线表单](screenshots/06-route-form.png) |
+| ![同行人管理](https://cdn.jsdelivr.net/gh/hanyuestar/travel-expense@main/screenshots/05-travelers.png) | ![路线表单](https://cdn.jsdelivr.net/gh/hanyuestar/travel-expense@main/screenshots/06-route-form.png) |
 | 逗号 / 空格分隔一次加多人；可改名、**「设为我」**标记记账人本人、移除（已被流水引用时二次确认并说明影响）；名单与登记人数不一致时给出提示 | 表单**不再手工填写 9 类花费**，改为「9 类花费由逐笔流水自动汇总（当前 N 笔）」说明 + **「去记流水」**直达；其余字段与旧版一致 |
 
 | AI 规划：行程 / 注意事项 / 美食推荐 一次生成 |
 |---|
-| ![AI 规划与备注回填](screenshots/07-ai-notes.png) |
+| ![AI 规划与备注回填](https://cdn.jsdelivr.net/gh/hanyuestar/travel-expense@main/screenshots/07-ai-notes.png) |
 | 「景点路线」旁点「AI 规划」→ 按天行程自动填入（按地理顺序、标注当天住宿城市）；**同时生成的「注意事项」与「美食推荐」自动写入备注**（上图中备注内容即 AI 产出）。若备注已有你自己的文字，则在其后**追加**（`—— AI 补充 ——`）而不是覆盖；重复生成也不会重复追加。生成后可点「调整」用大白话多轮修改。 |
 
 ---
@@ -68,9 +69,6 @@
 
 演示版为**单用户 localStorage 版**，内置示例数据，可随意新增 / 编辑 / 删除路线、**逐笔记账并体验 AA 分账**（示例「周末近郊轻旅行」已预置同行人与流水）、查看年度统计；所有改动仅存于当前浏览器，不会上传任何服务器。
 
-![演示版 AA 结算](screenshots/08-demo-settle.png)
-
-*单用户演示版的「结算」页：与正式版同一套交互 —— 每人实付 / 应负担 / 差额、「最少转账方案（共 2 笔）」，以及「未指定付款人（含历史期初数据）不参与结算」的口径说明。*
 
 ---
 
