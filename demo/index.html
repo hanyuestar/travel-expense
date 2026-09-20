@@ -443,7 +443,7 @@ const SAMPLE=[
    ]}
 ];
 let routes=[];
-let state={view:"routes",filterYear:"all",search:"",curId:null,detailTab:"overview"};
+let state={view:"routes",filterYear:"all",search:"",curId:null,detailTab:"overview",editReturn:null};
 
 /* ---------- 浏览器本地存储（替代后端 API） ---------- */
 function load(){
@@ -694,7 +694,12 @@ async function saveForm(){
     notes:document.getElementById("f_notes").value};
   setSync("保存中…");
   try{
-    if(state.curId){await apiPut(state.curId,obj);toast("已保存");closeMask("formMask");await reload();}
+    if(state.curId){
+      const back=state.editReturn;   /* closeMask 会清标记，先取值 */
+      await apiPut(state.curId,obj);toast("已保存");closeMask("formMask");await reload();
+      if(back&&routes.find(x=>x.id===back)){state.curId=back;state.detailTab="overview";openDetail(back);}
+      setSync("已存浏览器本地");return;
+    }
     else{
       const rec=await apiPost(Object.assign({travelers:[],expenses:[],exp:{}},obj));
       toast("已新增路线，接下来可以逐笔记录花费");
@@ -734,7 +739,7 @@ function renderDetailTab(){
   if(state.detailTab==="overview"){
     acts.innerHTML='<button class="btn" id="d_edit">编辑</button><button class="btn btn-primary" data-close="detailMask">关闭</button>';
     const eb=document.getElementById("d_edit");
-    if(eb)eb.onclick=()=>{closeMask("detailMask");openForm(r.id);};
+    if(eb)eb.onclick=()=>{closeMask("detailMask");openForm(r.id);state.editReturn=r.id;};
     acts.querySelectorAll("[data-close]").forEach(b=>{b.onclick=()=>closeMask(b.dataset.close);});
     renderOverview(r,body);
     return;
@@ -1028,7 +1033,9 @@ async function clearAll(){
 
 /* ---------- helpers ---------- */
 function openMask(id){document.getElementById(id).classList.add("open");}
-function closeMask(id){document.getElementById(id).classList.remove("open");}
+function closeMask(id){document.getElementById(id).classList.remove("open");
+  /* 与正式版一致：关闭编辑弹窗即清掉「保存后回概览」标记，避免残留标记误触发 */
+  if(id==="formMask")state.editReturn=null;}
 function refresh(){renderUpcoming();renderRoutes();renderStats();}
 
 /* ---------- events ---------- */
@@ -1046,7 +1053,7 @@ document.getElementById("routeGrid").onclick=e=>{const b=e.target.closest("[data
   if(b.dataset.act==="detail")openDetail(id);
   else if(b.dataset.act==="edit")openForm(id);
   /* 卡片上的「记一笔」：直接进入该路线的流水页签并打开记账表单 */
-  else if(b.dataset.act==="add"){state.curId=id;state.detailTab="ledger";openDetail(id);openExpenseSheet(id,null);}};
+  else if(b.dataset.act==="add"){openExpenseSheet(id,null);}};
 document.getElementById("upList").onclick=e=>{const b=e.target.closest("[data-act]");if(b)openDetail(b.dataset.id);};
 document.getElementById("addBtn").onclick=()=>openForm(null);
 document.getElementById("formSave").onclick=saveForm;

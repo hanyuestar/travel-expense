@@ -5,7 +5,7 @@ import * as ledger from './ledger.js';
 
 let routes = [];
 let searchTimer = null;
-let state = { filterYear: 'all', search: '', curId: null, detailId: null, detailTab: 'overview', page: 1, total: 0, pageSize: 50, years: [] };
+let state = { filterYear: 'all', search: '', curId: null, detailId: null, detailTab: 'overview', page: 1, total: 0, pageSize: 50, years: [], editReturnDetail: null };
 
 /* 全量年份（由 GET /api/routes/years 下发），工作台年份胶囊据此渲染。
  * 注意：必须用 .catch 兜底而非 try/catch —— 接口异常是 Promise 拒绝，
@@ -256,13 +256,10 @@ function onGridClick(e) {
   const act = b.dataset.act;
   if (act === 'detail') openDetail(id);
   else if (act === 'edit') openForm(id);
-  /* 卡片上的「记一笔」：直接进入该路线详情的流水页签并打开记账表单 */
+  /* 卡片上的「记一笔」：只打开记账弹窗（此前会叠开一个详情弹窗，造成两个弹窗同时出现） */
   else if (act === 'add') {
     const r = routes.find(x => x.id === id);
     if (!r) return;
-    state.detailId = id;
-    state.detailTab = 'ledger';
-    openMask('detailMask');
     ledger.openExpenseSheet(r, null, reloadAfterMutation);
   }
 }
@@ -801,24 +798,35 @@ async function saveForm() {
     notes: document.getElementById('f_notes').value
   };
   try {
-    if (state.curId) { await api.put('/routes/' + encodeURIComponent(state.curId), obj); toast('已保存'); }
-    else {
-      const rec = await api.post('/routes', obj);
-      toast('已新增路线，接下来可以逐笔记录花费');
+    if (state.curId) {
+      /* 从详情进入的编辑：保存后回到该路线的「概览」（closeMask 会清标记，故先取值） */
+      const back = state.editReturnDetail;
+      await api.put('/routes/' + encodeURIComponent(state.curId), obj);
+      toast('已保存');
       closeMask('formMask');
       await reloadAfterMutation();
-      /* 新增后直接引导到流水页签，省掉「再点一次查看」 */
-      if (rec && rec.id) {
-        state.detailId = rec.id;
-        state.detailTab = 'ledger';
+      if (back && routes.find(x => x.id === back)) {
+        state.detailId = back;
+        state.detailTab = 'overview';
         openMask('detailMask');
         paintDetailTabs();
         renderDetailTab();
       }
       return;
     }
+    const rec = await api.post('/routes', obj);
+    toast('已新增路线，接下来可以逐笔记录花费');
     closeMask('formMask');
     await reloadAfterMutation();
+    /* 新增后直接引导到流水页签，省掉「再点一次查看」 */
+    if (rec && rec.id) {
+      state.detailId = rec.id;
+      state.detailTab = 'ledger';
+      openMask('detailMask');
+      paintDetailTabs();
+      renderDetailTab();
+    }
+    return;
   } catch (e) { toast(e.message); }
 }
 
@@ -873,7 +881,8 @@ function renderDetailTab() {
     const eb = document.getElementById('d_edit');
     if (eb) {
       eb.style.display = seedOnly ? 'none' : '';
-      eb.onclick = () => openForm(r.id);
+      /* 先关详情再开编辑（否则编辑弹窗被详情盖住）；保存成功后回到该路线的概览 */
+      eb.onclick = () => { closeMask('detailMask'); openForm(r.id); state.editReturnDetail = r.id; };
     }
     acts.querySelectorAll('[data-close]').forEach(b => { b.onclick = () => closeMask(b.dataset.close); });
     renderOverview(r, body, seedOnly);
@@ -992,7 +1001,12 @@ export function renderProfile() {
 
 /* ---------- 遮罩 ---------- */
 export function openMask(id) { document.getElementById(id).classList.add('open'); }
-export function closeMask(id) { document.getElementById(id).classList.remove('open'); }
+/* 同一时刻只应有一个弹窗：关闭编辑弹窗时清掉「保存后回概览」的标记，
+ * 避免用户取消编辑后、下一次无关保存误触发了回到详情 */
+export function closeMask(id) {
+  document.getElementById(id).classList.remove('open');
+  if (id === 'formMask') state.editReturnDetail = null;
+}
 
 export function bindFormEvents() {
   document.getElementById('formSave').onclick = saveForm;
