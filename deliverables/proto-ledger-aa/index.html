@@ -1,0 +1,1067 @@
+<!doctype html>
+<!--
+  交互原型：逐笔消费流水 + AA 分账
+  · 复用 public/styles.css（本目录 styles.css 为其逐字节副本）中的既有元素/组件/颜色
+  · 新增组件样式集中在 proto.css（已标注落地时应合并进 public/styles.css）
+  · 纯前端演示：数据在内存中，无后端请求；仅用于评审交互与可行性
+-->
+<html lang="zh-CN" data-page-node-id="WAlbIgYe4MeRzBs4rsHCI9">
+<head data-page-node-id="48C41SlVRepD29XXYbAExt">
+<meta charset="utf-8" data-page-node-id="FMj9gvnOkFhc576954Ghmj">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" data-page-node-id="giTPpDtiQMZPES82TEeF9Q">
+<title>原型 · 逐笔消费流水 + AA 分账</title>
+<link rel="stylesheet" href="styles.css" data-page-node-id="x4V65IYoOY2UXoFl9isF3f">
+<link rel="stylesheet" href="proto.css" data-page-node-id="Zc6csbRflCdS3SfDGwvtcy">
+</head>
+<body data-page-node-id="AnENrYEPDpZ9Z9873QBgij">
+
+<header data-page-node-id="NgU10K78NrEYqxCx0HKTSm">
+  <div class="h-row" data-page-node-id="7rTRm0P27JS5tOlBQbYusW">
+    <div data-page-node-id="rvYyKWlTh4WrfIQyOi04C6">
+      <div class="h-title" data-page-node-id="cAZRhYvhjg7DDsVdaYVux8">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="TzXOS8mt2I8tRfoTxNr2Tn"><path d="M3 11l19-9-9 19-2-8-8-2z" data-page-node-id="q70uuYlX58zFit5i8tVZnR"/></svg>
+        <span data-page-node-id="FEKYOqV6J8OSG4XMkw7q5i">旅行路线 · 经费台</span>
+      </div>
+      <div class="h-sub" data-page-node-id="khxbL9IKv8dhkKCXo7bl8b">管理历年出行路线与花费 · 多用户</div>
+    </div>
+    <div class="h-actions" data-page-node-id="2krObQJzmDGTAXLtt1xL4f">
+      <div class="user-chip" data-page-node-id="IcrtcnFENpjpoy4y4VZ3cx">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px" data-page-node-id="kcTJ3z81NidRaGFoJBFdAj"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" data-page-node-id="ZetCeLI2HdPi9OlQ36dbIF"/><circle cx="12" cy="7" r="4" data-page-node-id="CCpJXPaID8XqFFPuSAiHQA"/></svg>
+        <span data-page-node-id="GO9Bg3OkQZLvh9nrzVsxsT">我（Kyson）</span>
+        <svg class="user-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px" data-page-node-id="SBOz8QMrBq9Fr28ci7A4qw"><path d="M6 9l6 6 6-6" data-page-node-id="PXhZPwSVsTV0TTMIFFwwYq"/></svg>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- 原型操作条：置于文档流，切换演示状态 -->
+<div class="proto-bar" data-page-node-id="cqaiUFA2GCRIDL7dH2eWH4">
+  <span class="ptag" data-page-node-id="RFkRkeTzdJcijArS27ngss">交互原型 · 逐笔流水 + AA 分账</span>
+  <span style="opacity:.7" data-page-node-id="sWYlpkbA4n5R9BRBNxghCd">统一流水口径，无模式切换</span>
+  <button class="pb" data-demo="reset" data-page-node-id="erft3YGKM9tb0TPujVuc1U">重置演示数据</button>
+  <span style="opacity:.7;margin-left:6px" data-page-node-id="J8NTYYiZCVkRdPNprB73eI">AI 权限：</span>
+  <button class="pb on" data-ai="1" data-page-node-id="N6QDlDDWQfC0E61dht0Gcv">已启用</button>
+  <button class="pb" data-ai="0" data-page-node-id="lwLkqFB5fVb3BL2ZbH5TZ5">未启用</button>
+</div>
+
+<main id="view" style="min-height:calc(100vh - 130px)" data-page-node-id="0QRSIdafDjlv68x49NCzyJ"></main>
+
+<div class="foot" data-page-node-id="RcK6vcTYFAYHt7eVUkexGy">原型仅用于交互评审，数据为演示数据，刷新即重置。<br data-page-node-id="ofBFTiBIv5EncjlBWEMF3A">© Kyson 原创技术支持</div>
+
+<!-- ========== 路线详情（概览 / 流水 / 结算） ========== -->
+<div class="mask" id="detailMask" data-page-node-id="fCfqEaPWzMFVhp9UEfkIRa">
+  <div class="sheet" style="max-width:620px" data-page-node-id="tb9CGctJIFAPVYTyeHE6MJ">
+    <h2 data-page-node-id="Txa6AnHGKPJmhYaf17QmDj">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="uSLwCvCZ2g9Sjocio8yTFE"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z" data-page-node-id="70FPEitmUW4zx5jcEWROzN"/><circle cx="12" cy="10" r="3" data-page-node-id="ApN4Imnmq6iNBZNGBHzxmP"/></svg>
+      <span id="d_name" data-page-node-id="jwe8TV3ifJIljfs11Ugjh5"></span>
+      <button class="close-x" data-close="detailMask" data-page-node-id="DWpN7Z5YPFLECi4zAx5j5E">×</button>
+    </h2>
+    <div class="tabs" id="d_tabs" data-page-node-id="BZTPVJJXDIYJqj2MqdFaCv">
+      <div class="tab" data-tab="overview" data-page-node-id="RkGXvnzWPu4VfxZ5E5Mdg0">概览</div>
+      <div class="tab" data-tab="ledger" data-page-node-id="iTTgwfp4jjt0V0gsjNTkQc">流水</div>
+      <div class="tab" data-tab="settle" data-page-node-id="KTylQQPJG8NL6Gg6IqaHRh">结算</div>
+    </div>
+    <div id="d_body" data-page-node-id="vfpoMzkwj7ATXHX66YSCPn"></div>
+    <div class="sheet-actions" id="d_actions" data-page-node-id="6c3OWxBBPTXLlUBPS0b993"></div>
+  </div>
+</div>
+
+<!-- ========== 新增 / 编辑路线（既有功能，按 public/index.html #formMask 1:1 复刻） ========== -->
+<div class="mask" id="formMask" data-page-node-id="iFGHvX42KRxEcklk6BQHoD">
+  <div class="sheet" data-page-node-id="K2rkcAKcM8MVvzq1Oa82Xi">
+    <h2 data-page-node-id="Y9HCMwXafNfkVkzQkPFNUp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="qMFS720SrK49iMHa8I1SsL"><path d="M12 5v14M5 12h14" data-page-node-id="COvgqsWqKF6QM9zdjfPrTT"/></svg><span id="formTitle" data-page-node-id="cPB4ynXetuV0hnOp5JVCvh">新增路线</span><button class="close-x" data-close="formMask" data-page-node-id="GXd76vmgwcdWXu5HNxDHwY">×</button></h2>
+    <div class="field" data-page-node-id="qzyg26AD0SkoJSddksUUL5"><label data-page-node-id="GzTo4H2jIKxjcVJAgXCCXG">路线名称 <span class="hint" data-page-node-id="G9fA5ct97o3Cj5AZK7sumG">如：西北大环线 / 京都赏枫</span></label><input id="f_name" placeholder="路线名称" data-page-node-id="w34mKYUqM12G1MJyOc1gat"></div>
+    <div class="exp-grid" data-page-node-id="3sN9HEM6h5sTdxkWacLumH">
+      <div class="field" data-page-node-id="dl7xnc14TsdJ4kQj5l6SL1"><label data-page-node-id="VBKon1FgQsEweOmAyrXmUH">年份</label><input id="f_year" placeholder="2026" inputmode="numeric" data-page-node-id="rEVfbCtb8lomUevyQTUd8Q"></div>
+      <div class="field" data-page-node-id="a6EqizmCfk8RxmbVSh7zQT"><label data-page-node-id="0XtOvGETVyPVf6Ns9tL0eP">开始日期</label><input type="date" id="f_start_date" data-page-node-id="unHtxFfUFQIy6glWL6fYUf"></div>
+      <div class="field" data-page-node-id="nJ1Lv9EJ9r5uMul0oY6GlR"><label data-page-node-id="4fXwnoHGtKzBcO21Irex7w">结束日期</label><input type="date" id="f_end_date" data-page-node-id="SxLRbcRoV1jjR6wQQphrKm"></div>
+      <div class="field" data-page-node-id="F21FS973vcKzahHOeCDIIw"><label data-page-node-id="07qTy0lzZIP3gzOS0sB880">类型</label>
+        <select id="f_type" data-page-node-id="8DfYpVDJF7w0cVqAE2xcZM"><option value="自由行" data-page-node-id="MzX3VfKudBq3Skymcw8uRM">自由行</option><option value="跟团" data-page-node-id="baOGhn0FNyIWPqrtAFGaAH">跟团</option><option value="半自由行" data-page-node-id="thyG0GRFy4wRfUUBVKgmT6">半自由行</option></select>
+      </div>
+      <div class="field" data-page-node-id="a40AsVMct0Pbj80J2qQB1T"><label data-page-node-id="kVhiiceiiY96T1ZhfAYF8D">天数 <span class="hint" data-page-node-id="SIwB77XtbDUpwGWxTwr0cs">自动计算</span></label><input id="f_days" placeholder="自动" readonly style="background:#f5f7f6;cursor:not-allowed" data-page-node-id="0NUPrbU6YT8oSVdgxfcEnH"></div>
+      <div class="field" data-page-node-id="lDhYo1oTKG5FR2Qd42PKED"><label data-page-node-id="ZzcB98Bc7RqCFMQDoNs6VN">同行人数 <span class="hint" data-page-node-id="Ag2E2QQRDrScI3lwvILxwT">用于算人均</span></label><input id="f_people" placeholder="2" inputmode="numeric" data-page-node-id="q9Xu8zV31NZGSN2exhaQpQ"></div>
+      <div class="field" data-page-node-id="5nknXaZjSMwwQF875S2DOA"><label data-page-node-id="GBY0TqQ6uSnEejyWH6TSb1">币种</label><select id="f_currency" data-page-node-id="n4eU9grnElVIGkAl00Qh0n"></select></div>
+      <div class="field" data-page-node-id="xBwHaSL7YIN0iWdDxrK30N"><label data-page-node-id="y1pGfxRUjCxbqY6h0PGJH2">总预算 <span class="hint" data-page-node-id="ZVvCDR75aiy7BDDXvZKIp0">本位币近似</span></label><input id="f_budget_total" placeholder="0" inputmode="decimal" data-page-node-id="XwDWWnSR5mXE1nRCJlLkhU"></div>
+      <div class="field" data-page-node-id="swF0ksczXhF1KtnZH8BP5c"><label data-page-node-id="RgqL1XD49aiPLwWx0UpIdx">日均预算</label><input id="f_budget_daily" placeholder="0" inputmode="decimal" data-page-node-id="2aDNySKNVLYAbYRgGIl68J"></div>
+      <div class="field" data-page-node-id="WAtO1yqpnlsEKUHIawqlZ6"><label data-page-node-id="NJBZNmtty6aEGinl8nWrvG">主要目的地</label><input id="f_dest" placeholder="青海、甘肃" data-page-node-id="DbgrhFaH4hNWHqyZNr4v0H"></div>
+    </div>
+    <div class="field" data-page-node-id="hr8c2A4AVBxKBCfizjBCVp">
+      <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap" data-page-node-id="TbnTas3rDJN99NtcwGioAm">
+        <span data-page-node-id="XtD3ipc9NhBKHj3XdqLni9">景点路线</span>
+        <button type="button" class="btn btn-sm btn-line" id="aiPlanBtn" title="AI 智能规划行程" style="padding:2px 8px;font-size:12px" data-page-node-id="6z8GfHAAC0jHzCH3Lvav4J">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:middle" data-page-node-id="eTefDx8HS0fGw2KuiMxFyb"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v1a3 3 0 0 1-3 3h-1v1a4 4 0 0 1-8 0v-1H7a3 3 0 0 1-3-3v-1a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4z" data-page-node-id="NTxjmBzwYeQRpZavmJQN6k"/><circle cx="9" cy="11" r="1" data-page-node-id="dz4nR4kbv65mDOeDDqgpx6"/><circle cx="15" cy="11" r="1" data-page-node-id="tRVMnAi3MmjxOgwteRx1CU"/></svg>
+          <span style="vertical-align:middle" data-page-node-id="2Fb2en12kizjrgpT7NFGYD">AI 规划</span>
+        </button>
+        <button type="button" class="btn btn-sm btn-line" id="aiChatBtn" title="AI 对话式调整行程" style="padding:2px 8px;font-size:12px;display:none" data-page-node-id="QRx8V9n6tT7qDyzHGLiIG6">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:middle" data-page-node-id="GzJZWxc0fuwhoYQawqAr14"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" data-page-node-id="sujG0bo6xMqxJzS0MDLiQ5"/></svg>
+          <span style="vertical-align:middle" data-page-node-id="KhXBxAYuFovJEPPfMTLyrV">调整</span>
+        </button>
+      </label>
+      <textarea id="f_scenic" placeholder="按天记录：Day1 西宁-祁连…；Day2 张掖…"></textarea>
+    </div>
+    <div class="field" data-page-node-id="wG5GWGr0pfFe8qiZmTewVY"><label data-page-node-id="BKGG4YGfVtg8A7NpZAG6kK">住宿位置</label><textarea id="f_hotel" placeholder="如家武林广场店、迪堡酒店…"></textarea></div>
+    <div class="field" data-page-node-id="Xcwy5oR8NEswKdLO0UkQhx">
+      <label data-page-node-id="g1DhMArICMskuZXB0LDPsm">花费明细 <span class="hint" data-page-node-id="lO11G73mGh32LzNQ95DNc7">由逐笔流水自动汇总，无需手工填写</span></label>
+      <div class="banner" id="expLedgerWarn" style="margin:0" data-page-node-id="iDAq1g16PiushbHdYmcnib"></div>
+    </div>
+    <div class="field" data-page-node-id="1hFwtrW6gMYgKTMCEzXAho"><label data-page-node-id="H8dKeZTIYGL9quDiVEkkwV">备注</label><textarea id="f_notes" placeholder="可选"></textarea></div>
+    <div class="sheet-actions" data-page-node-id="K8vDSOYLCmFHF6wEOHiftn">
+      <button class="btn btn-danger btn-sm" id="formDelete" style="display:none" data-page-node-id="oPvIlZWgqq9YBvJ6HgT44x">删除</button>
+      <button class="btn" data-close="formMask" data-page-node-id="eqLOAzsIO5BPAOVZggNMdA">取消</button>
+      <button class="btn btn-primary" id="formSave" style="background:var(--primary);color:#fff" data-page-node-id="CANoSNQrdjNHKtJKmiX4Lf">保存路线</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== AI 行程调整对话（既有功能，按 public/index.html #aiChatMask 1:1 复刻） ========== -->
+<div class="mask" id="aiChatMask" data-page-node-id="XMKHhphvGJrEVnNc0TRYOq">
+  <div class="sheet" style="max-width:680px" data-page-node-id="Tv6Z2gzPCP9GtiZHXPLQ4C">
+    <h2 data-page-node-id="qTe0LwAgm7iQc5gLZfHJmc">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;vertical-align:middle" data-page-node-id="A8isxtznkyWLzYlBEeoIaT"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" data-page-node-id="DeumUdCJhmO2jRSQ4H2B0a"/></svg>
+      <span style="vertical-align:middle" data-page-node-id="hvI6erKnAo9T1oHgHfB5DI">AI 行程调整</span>
+      <button class="close-x" data-close="aiChatMask" data-page-node-id="mJ8iUA75FAV1XSu4i0zDuQ">×</button>
+    </h2>
+    <div style="margin-bottom:10px" data-page-node-id="zBCgM8aWDqiiY3eO1m0QGp">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:6px;cursor:pointer;display:flex;align-items:center;gap:4px" id="aiChatCurrentToggle" data-page-node-id="spkCFliDTKqWmmlWq3SrMJ">
+        <span data-page-node-id="qZO58Gw4okOpNFe4EgRMIF">📋 当前行程（点击展开/收起）</span>
+      </div>
+      <div id="aiChatCurrentContent" style="background:#f7fbfa;border-radius:10px;padding:10px;font-size:13px;line-height:1.6;max-height:120px;overflow-y:auto;white-space:pre-wrap;display:none" data-page-node-id="6Lcwf7T1FqZKIzBn3JkNDR"></div>
+    </div>
+    <div id="aiChatMessages" style="flex:1;overflow-y:auto;min-height:200px;max-height:400px;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;background:#fafefc" data-page-node-id="hZZE8KsEsBHlQbrdj9EBtz">
+      <div style="text-align:center;color:var(--muted);font-size:13px;padding:20px 0" id="aiChatEmpty" data-page-node-id="hmgtII43JfdLSqoBwwWSAp">
+        输入调整要求，AI 会基于当前行程进行修改<br data-page-node-id="yn2gnTEQkezltPcMWRoM07">
+        <span style="font-size:12px" data-page-node-id="fR06LPLSo3SpDnHVKDmyga">例如：把第二天的故宫换成颐和园、增加美食推荐、第一天太赶了精简一下</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:flex-end" data-page-node-id="V7UVAxGabo4ZS5JFta7bmI">
+      <textarea id="aiChatInput" placeholder="输入调整要求，如：把第二天的故宫换成颐和园" rows="2" style="flex:1;resize:none;padding:8px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit"></textarea>
+      <button class="btn btn-primary" id="aiChatSend" style="white-space:nowrap;height:42px;background:var(--primary);color:#fff" data-page-node-id="AIoAzF0iUyuBx2EZJTkodk">发送</button>
+    </div>
+    <div id="aiChatApplyBar" style="display:none;margin-top:10px;padding:10px;background:var(--primary-l);border-radius:10px;align-items:center;justify-content:space-between" data-page-node-id="JzAHIosAvKVix3d4BUCkH0">
+      <span style="font-size:13px;color:var(--primary-d)" data-page-node-id="MUvrjc7x4ikifPelsYxMuf">✨ AI 已生成调整后的行程</span>
+      <button class="btn btn-primary btn-sm" id="aiChatApply" style="background:var(--primary);color:#fff" data-page-node-id="pPcqz9BTtvXeGR4p293wGc">应用此版本</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 记一笔 ========== -->
+<div class="mask" id="expMask" data-page-node-id="VhBNGNOU0EUgpzdABUNtml">
+  <div class="sheet" data-page-node-id="Fi7VskSZElUwfiiRt1zDTf">
+    <h2 data-page-node-id="eVMGLGhIVMxbcMItsFFlnL">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="8UuRFxAwxVG2tSOK7KcGDG"><path d="M12 5v14M5 12h14" data-page-node-id="SR8cnBA6TxYLEA58hLoBnG"/></svg>
+      <span id="e_title" data-page-node-id="ipcjAnyZ2FfPZCBJ0pb4WN">记一笔</span>
+      <button class="close-x" data-close="expMask" data-page-node-id="0IodaYwGEAVJpqUK0xmEp0">×</button>
+    </h2>
+
+    <div class="field" data-page-node-id="Qz8XsHWgYiIUEgsQCXmqR1">
+      <label data-page-node-id="ARRQWiZ7F0HEaPqITzBJJY">金额 <span class="hint" data-page-node-id="pLv7GZUogvJJeHJ9528oJk">原币金额，无需换汇</span></label>
+      <div class="amt-input" data-page-node-id="5D1D1udbHWMymCUu29ZNBP">
+        <span class="cur" id="e_cur" data-page-node-id="QlaMlIZOuAFifSgcVu9ZHP">¥</span>
+        <input id="e_amount" inputmode="decimal" placeholder="0.00" autocomplete="off" data-page-node-id="An97eNPIOaEsW6OxW4eqsT">
+      </div>
+      <div class="quick-amt" id="e_quick" data-page-node-id="ZzsdiHUIJXFmMIM5sHm9UD"></div>
+    </div>
+
+    <div class="field" data-page-node-id="sVkBRFFyEFe3Akt9dCEVA7">
+      <label data-page-node-id="CXuNozvOqZiFQ4Fg6fHPva">类目 <span class="hint" data-page-node-id="RW3Iny6UlGk1OiYuVX85fI">与路线 9 类花费同源</span></label>
+      <div class="chip-row" id="e_cats" data-page-node-id="s6C8D3QNTg5Ko79TgNT7Lz"></div>
+    </div>
+
+    <div class="exp-grid" data-page-node-id="t5U8mCESHBXShOFyZR1t1D">
+      <div class="field" data-page-node-id="avDlJSm2ufDNcEyhCdj8ni"><label data-page-node-id="Ya5EgcNDSYzBA2BSLx4z8t">消费日期</label><input type="date" id="e_date" data-page-node-id="JFjFOXsoUBOKiWVkq3vkHB"></div>
+      <div class="field" data-page-node-id="OyzzNO64kPXlX81mdtVI2T"><label data-page-node-id="yDPpz5dRhotK1XuaiTHCFR">事项 <span class="hint" data-page-node-id="uZRoUTA6CQijwD0BlI8E2a">如：青海湖门票</span></label><input id="e_name" placeholder="选填" data-page-node-id="xcPVreFVupDYBGxG4E4ZcL"></div>
+    </div>
+
+    <div class="field" data-page-node-id="qhBOl1wryilUUvMI7OYX9g">
+      <label data-page-node-id="bFZHrc9F1KP7Q89oE0XWuE">谁付的钱 <span class="hint" data-page-node-id="xzYTy9gCRWqNZNhRTdXvUj">用于 AA 结算</span></label>
+      <div class="chip-row" id="e_payer" data-page-node-id="8iUkvqNqYn331ol5p4QexI"></div>
+    </div>
+
+    <div class="field" data-page-node-id="De29huuwgyfnIVGLgls1Cr">
+      <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap" data-page-node-id="WABif2sKONABmkmehu3HW8">
+        <span data-page-node-id="XVircobROruTGifhZ2rcEm">谁参与分摊</span>
+        <button type="button" class="btn btn-sm btn-line" id="e_all" style="padding:2px 8px;font-size:12px" data-page-node-id="qDKT119OUDsDiglFnryv1v">全选</button>
+        <button type="button" class="btn btn-sm btn-line" id="e_none" style="padding:2px 8px;font-size:12px" data-page-node-id="4f77qfZti9e8xwHgElpLV7">清空</button>
+      </label>
+      <div class="chip-row" id="e_parts" data-page-node-id="xBYnLc5xq2hBvxSCiPyb7f"></div>
+      <div class="split-hint" id="e_hint" data-page-node-id="guG9zUqTTMeN6jWaclDMke"></div>
+    </div>
+
+    <div class="field" data-page-node-id="d10S2w0WtIbhUUOj1PzLBm"><label data-page-node-id="ppYkdEuIhQCDKUXXn0xOot">备注</label><textarea id="e_note" placeholder="选填" style="min-height:56px"></textarea></div>
+
+    <div class="sheet-actions" data-page-node-id="xznpFYZcsXyRCpblBfkaJe">
+      <button class="btn btn-danger btn-sm" id="e_del" style="display:none" data-page-node-id="tM7kQlzqiEURkgeTzHKI4J">删除</button>
+      <button class="btn" data-close="expMask" data-page-node-id="pCivdC4B70OYVAVUxADrJR">取消</button>
+      <button class="btn btn-primary" id="e_save" data-page-node-id="teVTC31BBGyfYBwPMPojpV">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 同行人管理 ========== -->
+<div class="mask" id="tvMask" data-page-node-id="pZwftfpYbIP1RtNzaXRb4L">
+  <div class="sheet" style="max-width:460px" data-page-node-id="6SqEC2RvsUyPrtG05xwefD">
+    <h2 data-page-node-id="dHy0kAlR4xXQCNn6Fh387n">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="MYcWGtojFpU5DJqCNGkV3k"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" data-page-node-id="4M1TFKBFXX4pVtho5KnbFi"/><circle cx="9" cy="7" r="4" data-page-node-id="oUkDP7gpfgKVFsuDmsb5T6"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" data-page-node-id="JGPQCdUAbisRVjRna1CUrK"/></svg>
+      <span data-page-node-id="NjJuScuQdOAVqJWQH4Gtvd">同行人</span>
+      <button class="close-x" data-close="tvMask" data-page-node-id="szQFG6ZrTFG82vn8cKHHnZ">×</button>
+    </h2>
+    <div class="panel" style="margin-bottom:12px;box-shadow:none" data-page-node-id="Bgr7yOdjdmMrAJXikg6ZHq">
+      <div class="kv" data-page-node-id="2A7AfSGpyffbkYttsdZoVn"><span class="k" data-page-node-id="YSDACklPg5QIGJ8yC30NOV">同行人数（路线字段）</span><span class="v" id="t_people" data-page-node-id="NznUtVMPRxMiAqi7qtmsSM">—</span></div>
+      <div class="kv" data-page-node-id="coEejezeX5T3kDJYXDuMbk"><span class="k" data-page-node-id="waRqUz8LwLjoamPBaliETc">已登记同行人</span><span class="v" id="t_count" data-page-node-id="ZNjLOFQk3X2QZjolJJJAeR">—</span></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6" data-page-node-id="PDvzq0v19VqPN9XI0D0ICA">
+        同行人数与已登记名单不一致时，人均会按<b data-page-node-id="RURlm2tQOmr8rIgR2uzRil">名单</b>计算；名单为空则退回按人数均分。
+      </div>
+    </div>
+    <div class="field" data-page-node-id="9DALfW5nSZk6oxuWHXFsBg">
+      <label data-page-node-id="G9H2cQwh3qtOHVUlpREBSY">添加同行人 <span class="hint" data-page-node-id="fqoYkFEjzizAhqwn9eZKDu">支持逗号 / 空格分隔一次加多人</span></label>
+      <div class="code-row" data-page-node-id="iKb5G7iPw3GHxM97FoODsk">
+        <input class="grow" id="t_new" placeholder="如：阿May、老陈" data-page-node-id="vN77NZ2tRWBAaO83lX4v5e">
+        <button class="btn btn-primary btn-sm" id="t_add" style="height:42px" data-page-node-id="2brJQ28U3Xo5keIPsqoSiF">添加</button>
+      </div>
+    </div>
+    <div class="field" data-page-node-id="YPH5ggjPg7EZeASQGoUENf">
+      <label data-page-node-id="EttLiyT67HEgei6sud8D5X">名单 <span class="hint" data-page-node-id="k5roIV5XVy4MimjpBgmNeF">点击 × 移除（已有流水引用时会提示）</span></label>
+      <div class="chip-row" id="t_list" data-page-node-id="HV10398OWCOrkcO36DJ0CJ"></div>
+    </div>
+    <div class="sheet-actions" data-page-node-id="wHJIrvJbFq395zbNZglTzr">
+      <button class="btn btn-primary" data-close="tvMask" data-page-node-id="MblFY87t9ie34O3d4IHfG9">完成</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" data-page-node-id="raK1LwGSbOzfW11OMLxBs6"></div>
+
+<script>
+/* =========================================================================
+   原型数据层（与 PRD 中的数据模型一一对应，落地时替换为后端接口）
+   ========================================================================= */
+const CATS = ['交通','机票','高铁','住宿','餐饮','门票','团费','购物','其他'];
+const COLORS = {
+  '交通':'#60a5fa','机票':'#3b82f6','高铁':'#06b6d4','住宿':'#f59e0b',
+  '餐饮':'#ef6b5e','门票':'#a78bfa','团费':'#ec4899','购物':'#fb923c','其他':'#94a3b8'
+};
+/* 复用 styles.css 中已定义但从未使用的 --c0..--c8，作为同行人头像配色 */
+const TV_COLORS = ['#60a5fa','#3b82f6','#06b6d4','#f59e0b','#ef6b5e','#a78bfa','#ec4899','#fb923c','#94a3b8'];
+
+function seed() {
+  return {
+    routes: [
+      {
+        id:'r1', year:'2026', name:'青海甘肃大环线', type:'自由行', days:7, people:4,
+        daterange:'2026/07/11 - 2026/07/17', start_date:'2026-07-11', end_date:'2026-07-17',
+        dest:'西宁、青海湖、张掖', hotel:'西宁亚朵 / 张掖智选', currency:'CNY',
+        budget_total:12000, budget_daily:1700,
+        scenic:'Day1 抵达西宁\nDay2 塔尔寺-青海湖\nDay3 茶卡盐湖\nDay4 张掖七彩丹霞\nDay5 嘉峪关\nDay6 鸣沙山月牙泉\nDay7 返程',
+        notes:'', is_seed:false
+      },
+      {
+        id:'r2', year:'2025', name:'京都赏枫', type:'半自由行', days:5, people:2,
+        daterange:'2025/11/20 - 2025/11/24', start_date:'2025-11-20', end_date:'2025-11-24',
+        dest:'京都、大阪', hotel:'京都四条乌丸', currency:'CNY',
+        budget_total:18000, budget_daily:3600,
+        scenic:'Day1 关西机场-京都\nDay2 清水寺-二年坂\nDay3 岚山\nDay4 奈良\nDay5 返程',
+        notes:'', is_seed:false,
+        exp:{'交通':1200,'机票':7200,'高铁':900,'住宿':5200,'餐饮':2200,'门票':600,'团费':0,'购物':1800,'其他':300}
+      }
+    ],
+    travelers: {
+      r1: [
+        { id:'t1', name:'我（Kyson）', is_self:1 },
+        { id:'t2', name:'阿May', is_self:0 },
+        { id:'t3', name:'老陈', is_self:0 },
+        { id:'t4', name:'小王', is_self:0 }
+      ],
+      r2: [
+        { id:'t1', name:'我（Kyson）', is_self:1 },
+        { id:'t2', name:'太太', is_self:0 }
+      ]
+    },
+    expenses: {
+      /* 京都赏枫：与正式产品一致，用「期初（历史数据）」流水承载原有 9 类金额 */
+      r2: [
+        { id:'o1', spent_on:'2025-11-20', category:'交通', amount:1200, title:'期初（历史数据）', payer:null, parts:[], split_mode:'none', is_opening:1 },
+        { id:'o2', spent_on:'2025-11-20', category:'机票', amount:7200, title:'期初（历史数据）', payer:null, parts:[], split_mode:'none', is_opening:1 },
+        { id:'o3', spent_on:'2025-11-20', category:'高铁', amount:900,  title:'期初（历史数据）', payer:null, parts:[], split_mode:'none', is_opening:1 },
+        { id:'o4', spent_on:'2025-11-20', category:'住宿', amount:5200, title:'期初（历史数据）', payer:null, parts:[], split_mode:'none', is_opening:1 },
+        { id:'o5', spent_on:'2025-11-20', category:'餐饮', amount:2200, title:'期初（历史数据）', payer:null, parts:[], split_mode:'none', is_opening:1 },
+        { id:'o6', spent_on:'2025-11-20', category:'门票', amount:600,  title:'期初（历史数据）', payer:null, parts:[], split_mode:'none', is_opening:1 },
+        { id:'o7', spent_on:'2025-11-20', category:'购物', amount:1800, title:'期初（历史数据）', payer:null, parts:[], split_mode:'none', is_opening:1 },
+        { id:'o8', spent_on:'2025-11-20', category:'其他', amount:300,  title:'期初（历史数据）', payer:null, parts:[], split_mode:'none', is_opening:1 }
+      ],
+      r1: [
+        { id:'e1',  spent_on:'2026-07-11', category:'机票', amount:4360, title:'北京→西宁 4 张',        payer:'t1', parts:['t1','t2','t3','t4'], note:'' },
+        { id:'e2',  spent_on:'2026-07-11', category:'交通', amount:380,  title:'机场→酒店 包车',        payer:'t3', parts:['t1','t2','t3','t4'], note:'' },
+        { id:'e3',  spent_on:'2026-07-11', category:'住宿', amount:980,  title:'西宁亚朵 2 间',          payer:'t1', parts:['t1','t2','t3','t4'], note:'' },
+        { id:'e4',  spent_on:'2026-07-11', category:'餐饮', amount:520,  title:'莫家街夜市',            payer:'t2', parts:['t1','t2','t3','t4'], note:'烤羊肉+酸奶' },
+        { id:'e5',  spent_on:'2026-07-12', category:'门票', amount:640,  title:'塔尔寺+青海湖',          payer:'t1', parts:['t1','t2','t3','t4'], note:'' },
+        { id:'e6',  spent_on:'2026-07-12', category:'交通', amount:1600, title:'包车 D2-D4',            payer:'t4', parts:['t1','t2','t3','t4'], note:'3 天含司机' },
+        { id:'e7',  spent_on:'2026-07-12', category:'住宿', amount:860,  title:'黑马河民宿',            payer:'t3', parts:['t1','t2','t3','t4'], note:'' },
+        { id:'e8',  spent_on:'2026-07-13', category:'门票', amount:280,  title:'茶卡盐湖',              payer:'t1', parts:['t1','t2'], note:'小火车，老陈小王没去' },
+        { id:'e9',  spent_on:'2026-07-13', category:'餐饮', amount:460,  title:'茶卡镇午餐',            payer:'t2', parts:['t1','t2','t3','t4'], note:'' },
+        { id:'e10', spent_on:'2026-07-14', category:'住宿', amount:920,  title:'张掖智选 2 间',          payer:'t1', parts:['t1','t2','t3','t4'], note:'' },
+        { id:'e11', spent_on:'2026-07-14', category:'门票', amount:720,  title:'七彩丹霞 + 观光车',      payer:'t4', parts:['t1','t2','t3','t4'], note:'' },
+        { id:'e12', spent_on:'2026-07-15', category:'购物', amount:1350, title:'特产（牛肉干/枸杞）',    payer:'t1', parts:['t1'],            note:'只有我买' },
+        { id:'e13', spent_on:'2026-07-16', category:'餐饮', amount:610,  title:'敦煌夜市',              payer:'t3', parts:['t1','t2','t3','t4'], note:'' }
+      ],
+    }
+  };
+}
+
+let DB = seed();
+let state = { detailId:null, tab:'ledger', catFilter:'全部', editingExpense:null, draft:null, demo:'ledger' };
+
+/* =========================================================================
+   通用工具（与线上 api.js 的 esc/fmt/fmtMoney 行为一致）
+   ========================================================================= */
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmt(n){ n = Math.round((n||0)*100)/100; return n.toLocaleString('zh-CN',{minimumFractionDigits:(n%1?2:0),maximumFractionDigits:2}); }
+function money(n,cur){ return '¥' + fmt(n); }
+function toast(msg,ms){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),ms||2200); }
+function route(id){ return DB.routes.find(r=>r.id===id); }
+function travelers(id){ return DB.travelers[id] || (DB.travelers[id]=[]); }
+function expenses(id){ return DB.expenses[id] || (DB.expenses[id]=[]); }
+function tvColor(i){ return TV_COLORS[i % TV_COLORS.length]; }
+function tv(id, tid){ return travelers(id).find(t=>t.id===tid); }
+function initial(name){ return (name||'?').replace(/^我（|）$/g,'').slice(0,1); }
+
+/* 统一流水口径：9 类金额恒由流水派生（正式产品无模式切换） */
+function ledgerOn(){ return true; }
+function agg(r){
+  const out = {}; CATS.forEach(c=>out[c]=0);
+  if (ledgerOn(r)) { expenses(r.id).forEach(e=>{ out[e.category] = (out[e.category]||0) + (parseFloat(e.amount)||0); }); }
+  else { CATS.forEach(c=>out[c] = parseFloat((r.exp||{})[c])||0); }
+  return out;
+}
+function totalOf(r){ const a=agg(r); return CATS.reduce((s,c)=>s+(a[c]||0),0); }
+/* 人均分母：优先同行人名单，其次路线人数（与 PRD 口径一致） */
+function headcount(r){ const t=travelers(r.id); return t.length ? t.length : (parseFloat(r.people)||0); }
+function perOf(r){ const n=headcount(r), t=totalOf(r); return n>0 ? t/n : null; }
+function startMs(r){ const d=r.start_date?new Date(r.start_date):null; return d&&!isNaN(d)?d.getTime():(parseInt(r.year)||0)*1e10; }
+
+/* 结算：paid / owed / net + 最少转账次数（贪心匹配） */
+function settle(r){
+  const ts = travelers(r.id);
+  if (!ts.length) return null;
+  const paid={}, owed={};
+  ts.forEach(t=>{ paid[t.id]=0; owed[t.id]=0; });
+  expenses(r.id).forEach(e=>{
+    const amt = parseFloat(e.amount)||0;
+    if (paid[e.payer]!==undefined) paid[e.payer]+=amt;
+    /* split_mode='none' 表示纯记录本人实付、不作 AA 依据：只计实付，不产生任何人的应分担 */
+    if (e.split_mode === 'none') return;
+    const ps = (e.parts&&e.parts.length) ? e.parts.filter(p=>owed[p]!==undefined) : ts.map(t=>t.id);
+    if (ps.length) ps.forEach(p=> owed[p] += amt/ps.length);
+  });
+  const rows = ts.map((t,i)=>({ id:t.id, name:t.name, idx:i, is_self:t.is_self, paid:paid[t.id], owed:owed[t.id], net:paid[t.id]-owed[t.id] }));
+  /* 贪心：金额大者优先配对，最多 n-1 笔转账 */
+  const creds = rows.filter(x=>x.net>0.005).map(x=>({name:x.name, idx:x.idx, v:x.net})).sort((a,b)=>b.v-a.v);
+  const debts = rows.filter(x=>x.net<-0.005).map(x=>({name:x.name, idx:x.idx, v:-x.net})).sort((a,b)=>b.v-a.v);
+  const tfs=[]; let i=0,j=0;
+  while(i<creds.length && j<debts.length){
+    const m = Math.min(creds[i].v, debts[j].v);
+    if (m>0.005) tfs.push({ from:debts[j].name, fromIdx:debts[j].idx, to:creds[i].name, toIdx:creds[i].idx, amount:m });
+    creds[i].v-=m; debts[j].v-=m;
+    if (creds[i].v<0.005) i++;
+    if (debts[j].v<0.005) j++;
+  }
+  return { rows, tfs };
+}
+
+/* =========================================================================
+   工作台
+   ========================================================================= */
+function render(){
+  const list = DB.routes.slice().sort((a,b)=>startMs(b)-startMs(a));
+  document.getElementById('view').innerHTML = `
+  <div class="wrap">
+    <div class="stat-cards">
+      <div class="stat"><div class="v">${list.length}</div><div class="l">出行次数</div></div>
+      <div class="stat"><div class="v">¥${fmt(list.reduce((s,r)=>s+totalOf(r),0))}</div><div class="l">总花费（本位币）</div></div>
+      <div class="stat"><div class="v">${expenses('r1').length}</div><div class="l">本年度流水笔数</div></div>
+    </div>
+    <div class="toolbar">
+      <div class="chip-row grow">
+        <div class="chip active">全部</div><div class="chip">2026</div><div class="chip">2025</div>
+      </div>
+      <button class="btn btn-sm" id="newRouteBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>新增路线</button>
+    </div>
+    <div class="grid">${list.map(cardHtml).join('')}</div>
+  </div>`;
+  const nb = document.getElementById('newRouteBtn');
+  if (nb) nb.onclick = () => openForm(null);
+  document.querySelectorAll('[data-act]').forEach(b=>{
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const id = b.dataset.id;
+      if (b.dataset.act==='detail') openDetail(id);
+      if (b.dataset.act==='edit') openForm(id);
+      if (b.dataset.act==='add') { state.detailId=id; openExpense(null); }
+    };
+  });
+}
+
+function cardHtml(r){
+  const t = totalOf(r), per = perOf(r), n = expenses(r.id).length;
+  const a = agg(r);
+  const b = parseFloat(r.budget_total)||0;
+  const pct = b>0 ? Math.min(100, Math.round(t/b*100)) : 0;
+  const over = b>0 && t>b;
+  /* 流水徽标 + 个人负担额：仅已有流水时展示（无流水路线不显示全 0 的误导行） */
+  const sd = ledgerOn(r) && n > 0 ? settle(r) : null;
+  const mine = sd ? sd.rows.find(x=>x.is_self) : null;
+  return `<div class="card">
+    <div class="card-top"><div><div class="card-name">${esc(r.name)}</div>
+      <div class="badges">
+        <span class="badge b-year">${esc(r.year||'')}</span>
+        <span class="badge b-type">${esc(r.type||'')}</span>
+        ${r.days?`<span class="badge b-days">${r.days}天</span>`:''}
+        ${n?`<span class="pill pill-ok">流水 ${n} 笔</span>`:''}
+      </div></div></div>
+    <div class="card-meta">📅 ${esc(r.daterange||'')}${r.dest?' · '+esc(r.dest):''}</div>
+    <div class="card-total"><span class="amt">¥${fmt(t)}</span>${per!=null?`<span class="per">人均 ¥${fmt(per)}</span>`:''}</div>
+    ${b>0?`<div class="budget"><div class="budget-bar"><span style="width:${pct}%;background:${over?'var(--danger)':'var(--accent)'}"></span></div>
+      <div class="budget-txt">预算 ¥${fmt(b)} · 已用 ${pct}%${over?' · 超支 ¥'+fmt(t-b):''}</div></div>`:''}
+    <div class="minibar">${CATS.map(c=>{const v=a[c]||0;return v>0?`<span style="width:${(v/t*100).toFixed(1)}%;background:${COLORS[c]}" title="${c} ¥${fmt(v)}"></span>`:'';}).join('')}</div>
+    ${mine?`<div class="tv-row" style="color:var(--muted);font-size:12px">
+      我实付 <b style="color:var(--text)">¥${fmt(mine.paid)}</b> · 应分担 <b style="color:var(--text)">¥${fmt(mine.owed)}</b>
+      <span class="${mine.net>=0?'net-plus':'net-minus'}">（${mine.net>=0?'收回':'需补'} ¥${fmt(Math.abs(mine.net))}）</span></div>`:''}
+    <div class="card-actions">
+      <button class="btn btn-sm" data-act="detail" data-id="${r.id}">查看</button>
+      <button class="btn btn-sm" data-act="edit" data-id="${r.id}">编辑</button>
+      ${ledgerOn(r)?`<button class="btn btn-sm btn-line" data-act="add" data-id="${r.id}">＋ 记一笔</button>`:''}
+    </div>
+  </div>`;
+}
+
+/* =========================================================================
+   详情弹层：概览 / 流水 / 结算
+   ========================================================================= */
+function openDetail(id){ state.detailId=id; state.tab = ledgerOn(route(id))?'ledger':'overview'; openMask('detailMask'); drawDetail(); }
+function drawDetail(){
+  const r = route(state.detailId);
+  document.getElementById('d_name').textContent = r.name;
+  document.querySelectorAll('#d_tabs .tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===state.tab));
+  document.querySelectorAll('#d_tabs .tab').forEach(t=>t.onclick=()=>{ state.tab=t.dataset.tab; drawDetail(); });
+  document.querySelector('#d_tabs [data-tab="settle"]').style.display = ledgerOn(r)?'':'none';
+  document.getElementById('d_body').innerHTML = state.tab==='overview' ? overviewHtml(r) : state.tab==='ledger' ? ledgerHtml(r) : settleHtml(r);
+  drawActions(r);
+  bindDetail(r);
+}
+
+/* ---- 概览（沿用既有 detail-row / pre-wrap） ---- */
+function overviewHtml(r){
+  const t=totalOf(r), per=perOf(r), a=agg(r), b=parseFloat(r.budget_total)||0;
+  let h='';
+  h += row('年份 / 类型', (r.year||'')+' · '+(r.type||''));
+  h += row('出行日期', (r.daterange||'')+(r.days?`（${r.days}天）`:''));
+  h += row('目的地', r.dest||'—');
+  h += row('住宿', r.hotel||'—');
+  h += row('总花费', `¥${fmt(t)}` + (per!=null?`（人均 ¥${fmt(per)}）`:''));
+  if (b>0) { const over=t>b; h += row('预算', `¥${fmt(b)}` + (over?` · <span style="color:var(--danger)">超支 ¥${fmt(t-b)}</span>`:` · 剩余 ¥${fmt(b-t)}`)); }
+  h += '<div class="detail-row"><span class="k">景点路线</span></div><div class="pre-wrap">'+(r.scenic?esc(r.scenic):'—')+'</div>';
+  h += '<div style="height:10px"></div><div class="detail-row"><span class="k">9 类花费明细</span><span class="v">合计 ¥'+fmt(t)+'</span></div>';
+  CATS.forEach(c=>{ const v=a[c]||0, p=t>0?Math.round(v/t*100):0;
+    h += `<div class="detail-row"><span class="k"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${COLORS[c]};margin-right:6px"></span>${c}</span>
+      <span class="v">¥${fmt(v)} <span style="color:var(--muted);font-weight:400;font-size:12px">${p}%</span></span></div>`; });
+  if (ledgerOn(r)) {
+    h += `<div class="banner" style="margin-top:12px">以上 9 类金额由 <b>${expenses(r.id).length} 笔流水</b>自动汇总（只读）；逐笔明细见「流水」页签。
+      <div style="margin-top:8px"><button class="btn btn-sm btn-line" id="d_gotoLedger">去记流水</button></div></div>`;
+  }
+  return h;
+}
+
+/* ---- 流水 ---- */
+function ledgerHtml(r){
+  const list = expenses(r.id);
+  if (!ledgerOn(r)) return '<div class="empty">该路线暂无流水</div>';
+  if (!list.length) return `<div class="empty">还没有流水，记下第一笔吧 ✈<div class="led-empty-actions"><button class="btn btn-sm btn-primary" id="d_add2" style="background:var(--primary);color:#fff">＋ 记一笔</button></div></div>`;
+
+  const used = CATS.filter(c=>list.some(e=>e.category===c));
+  const filtered = state.catFilter==='全部' ? list : list.filter(e=>e.category===state.catFilter);
+  const sum = filtered.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const tvList = travelers(r.id);
+
+  let h = `<div class="chip-row" style="margin-bottom:10px">
+    ${['全部'].concat(used).map(c=>`<div class="chip${state.catFilter===c?' active':''}" data-cat="${c}">${c}</div>`).join('')}
+  </div>`;
+  h += `<div class="panel" style="box-shadow:none;padding:12px;margin-bottom:12px">
+    <div class="kv"><span class="k">${state.catFilter==='全部'?'全部流水':state.catFilter}</span><span class="v">${filtered.length} 笔 · ¥${fmt(sum)}</span></div>
+    <div class="kv"><span class="k">合计 / 人均</span><span class="v">¥${fmt(totalOf(r))} · 人均 ¥${fmt(perOf(r)||0)}</span></div>
+  </div>`;
+
+  /* 按日期倒序分组 */
+  const days = {};
+  filtered.forEach(e=>{ (days[e.spent_on||'未填日期'] ||= []).push(e); });
+  Object.keys(days).sort((a,b)=>b.localeCompare(a)).forEach(d=>{
+    const ds = days[d].reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+    h += `<div class="led-day">${esc(d)} · ¥${fmt(ds)}</div>`;
+    days[d].forEach(e=>{
+      const payer = tv(r.id, e.payer);
+      const parts = (e.parts||[]).map(p=>tv(r.id,p)).filter(Boolean);
+      const allIn = parts.length===tvList.length;
+      /* 分摊口径文案：期初 / 未计入分摊 / 单人承担 / 全员平分 / 部分人分摊 */
+      const share = e.is_opening ? '期初结转 · 不参与分摊'
+        : !parts.length ? '未计入分摊（仅记录实付）'
+        : parts.length===1 ? `仅 ${parts[0].name} 承担`
+        : allIn ? `${parts.length} 人平分`
+        : `${parts.length} 人分摊 · 非全员`;
+      h += `<div class="led" data-exp="${e.id}">
+        <span class="sw" style="background:${COLORS[e.category]||'#94a3b8'}"></span>
+        <div class="t">
+          <div class="n">${esc(e.title||e.category)}</div>
+          <div class="m">
+            <span>${esc(e.category)}</span>
+            <span>·</span><span>${esc(payer?payer.name:'—')} 付</span>
+            <span class="led-share">${share}</span>
+          </div>
+        </div>
+        <span class="amt">¥${fmt(e.amount)}</span>
+      </div>`;
+    });
+  });
+  if (!filtered.length) h += '<div class="empty">该分类下暂无流水</div>';
+  h += `<div class="tf-note" style="margin-top:6px">点击任意流水可编辑金额 / 付款人 / 分摊人</div>`;
+  return h;
+}
+
+/* ---- 结算 ---- */
+function settleHtml(r){
+  const sd = settle(r);
+  if (!sd) return '<div class="empty">请先在「同行人」里登记名单，才能做 AA 结算</div>';
+  const paidSum = sd.rows.reduce((s,x)=>s+x.paid,0);
+  const owedSum = sd.rows.reduce((s,x)=>s+x.owed,0);
+  /* parts 为空的流水只计实付、不计应分担，此时两者不相等，差额即「纯自付未纳入分摊」金额 */
+  const notSplit = Math.round((paidSum - owedSum) * 100) / 100;
+  let h = `<div class="panel" style="box-shadow:none;padding:14px;margin-bottom:12px">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>每人实付 / 应分担</h3>
+    <div class="table-wrap" style="box-shadow:none">
+      <table class="tbl" style="min-width:auto">
+        <thead><tr><th>同行人</th><th style="text-align:right">实付</th><th style="text-align:right">应分担</th><th style="text-align:right">差额</th></tr></thead>
+        <tbody>${sd.rows.map(x=>`<tr>
+          <td><span class="tv-row"><span class="tv ${x.is_self?'tv-me':''}" style="background:${tvColor(x.idx)}">${esc(initial(x.name))}</span>${esc(x.name)}${x.is_self?' <span class="pill pill-user">我</span>':''}</span></td>
+          <td style="text-align:right">¥${fmt(x.paid)}</td>
+          <td style="text-align:right">¥${fmt(x.owed)}</td>
+          <td style="text-align:right" class="settle-net ${x.net>=0?'net-plus':'net-minus'}">${x.net>=0?'+':'−'}¥${fmt(Math.abs(x.net))}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <div class="tf-note" style="margin-top:8px">实付合计 ¥${fmt(paidSum)} · 应分担合计 ¥${fmt(owedSum)}${notSplit>0
+      ? `；差额 ¥${fmt(notSplit)} 为「未纳入分摊的纯自付」支出（已在个人实付中体现）`
+      : '；两者相等，账目完整闭合'}</div>
+  </div>`;
+
+  h += `<div class="panel" style="box-shadow:none;padding:14px">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>最少转账方案 <span class="hint" style="font-weight:400">共 ${sd.tfs.length} 笔</span></h3>
+    ${sd.tfs.length ? sd.tfs.map(t=>`<div class="tf">
+        <span class="tv tv-sm" style="background:${tvColor(t.fromIdx)}">${esc(initial(t.from))}</span>
+        <span>${esc(t.from)}</span><span class="arrow">→</span>
+        <span class="tv tv-sm" style="background:${tvColor(t.toIdx)}">${esc(initial(t.to))}</span>
+        <span>${esc(t.to)}</span>
+        <span class="amt">¥${fmt(t.amount)}</span>
+      </div>`).join('') : '<div class="empty">账已平，无需转账 🎉</div>'}
+    <div class="tf-note" style="margin-top:8px">算法：按差额贪心配对，转账笔数 ≤ 人数−1；金额四舍五入到分，余差 ≤0.01 元时忽略。</div>
+  </div>`;
+  return h;
+}
+
+function row(k,v){ return `<div class="detail-row"><span class="k">${k}</span><span class="v">${v}</span></div>`; }
+
+/* ---- 详情底部操作 ---- */
+function drawActions(r){
+  const acts = document.getElementById('d_actions');
+  acts.innerHTML = state.tab==='ledger'
+    ? `<button class="btn btn-line" id="d_tv">同行人</button><button class="btn btn-primary" id="d_add">＋ 记一笔</button>`
+    : `<button class="btn btn-primary" data-close="detailMask">关闭</button>`;
+}
+
+function bindDetail(r){
+  const on=(sel,fn)=>{ const e=document.querySelector(sel); if(e) e.onclick=fn; };
+  /* 底部操作区是动态重建的，data-close 需重新绑定（静态元素在加载时已绑） */
+  document.querySelectorAll('#d_actions [data-close]').forEach(b=>b.onclick=()=>closeMask(b.dataset.close));
+  on('#d_gotoLedger', ()=>{ state.tab='ledger'; drawDetail(); });
+  on('#d_add', ()=>openExpense(null));
+  on('#d_add2', ()=>openExpense(null));
+  on('#d_tv', openTravelers);
+  document.querySelectorAll('#d_body [data-cat]').forEach(c=>c.onclick=()=>{ state.catFilter=c.dataset.cat; drawDetail(); });
+  document.querySelectorAll('#d_body .led[data-exp]').forEach(el=>el.onclick=()=>openExpense(el.dataset.exp));
+}
+
+/* 占位：正式产品无模式切换，此函数已移除 */
+
+/* =========================================================================
+   记一笔
+   ========================================================================= */
+const QUICK = [50,100,200,500,1000];
+
+function openExpense(expId){
+  const r = route(state.detailId);
+  const list = expenses(r.id);
+  const e = expId ? list.find(x=>x.id===expId) : null;
+  if (expId && !e) return;
+  if (!travelers(r.id).length && !(parseFloat(r.people)>0)) { toast('请先添加同行人'); return openTravelers(); }
+
+  /* 草稿：新记账默认「我付款 + 全员平分 + 今天/行程首日」 */
+  const ts = travelers(r.id);
+  state.editingExpense = e ? e.id : null;
+  state.draft = e ? { amount:e.amount, category:e.category, spent_on:e.spent_on, title:e.title, payer:e.payer,
+                      parts:(e.parts||[]).slice(), note:e.note }
+                  : { amount:'', category:'餐饮', spent_on:(r.start_date||new Date().toISOString().slice(0,10)), title:'',
+                      payer:(ts.find(t=>t.is_self)||ts[0]).id, parts:ts.map(t=>t.id), note:'' };
+  document.getElementById('e_title').textContent = e ? '编辑流水' : '记一笔';
+  document.getElementById('e_cur').textContent = '¥';
+  document.getElementById('e_del').style.display = e ? '' : 'none';
+  document.getElementById('e_quick').innerHTML = QUICK.map(q=>`<div class="chip" data-q="${q}">¥${q}</div>`).join('');
+  document.getElementById('e_cats').innerHTML = CATS.map(c=>`<div class="chip${state.draft.category===c?' active':''}" data-c="${c}">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${COLORS[c]};margin-right:5px"></span>${c}</div>`).join('');
+  document.getElementById('e_payer').innerHTML = ts.map((t,i)=>`<div class="chip${state.draft.payer===t.id?' active':''}" data-p="${t.id}">
+    <span class="tv tv-sm" style="background:${tvColor(i)};margin-right:4px">${esc(initial(t.name))}</span>${esc(t.name)}</div>`).join('');
+  paintParts();
+
+  setVal('e_amount', state.draft.amount);
+  setVal('e_date', state.draft.spent_on);
+  setVal('e_name', state.draft.title);
+  setVal('e_note', state.draft.note);
+  syncSplitHint();
+
+  /* 事件绑定（每次打开重绑，避免残留） */
+  bind('e_amount','input',v=>{ state.draft.amount=v; syncSplitHint(); });
+  bind('e_date','change',v=>state.draft.spent_on=v);
+  bind('e_name','input',v=>state.draft.title=v);
+  bind('e_note','input',v=>state.draft.note=v);
+  document.querySelectorAll('#e_quick [data-q]').forEach(c=>c.onclick=()=>{ state.draft.amount=c.dataset.q; setVal('e_amount',c.dataset.q); syncSplitHint(); });
+  document.querySelectorAll('#e_cats [data-c]').forEach(c=>c.onclick=()=>{
+    state.draft.category=c.dataset.c;
+    document.querySelectorAll('#e_cats .chip').forEach(x=>x.classList.toggle('active', x.dataset.c===c.dataset.c));
+  });
+  document.querySelectorAll('#e_payer [data-p]').forEach(c=>c.onclick=()=>{
+    state.draft.payer=c.dataset.p;
+    document.querySelectorAll('#e_payer .chip').forEach(x=>x.classList.toggle('active', x.dataset.p===c.dataset.p));
+  });
+  document.getElementById('e_all').onclick = ()=>{ state.draft.parts = ts.map(t=>t.id); paintParts(); };
+  document.getElementById('e_none').onclick = ()=>{ state.draft.parts = []; paintParts(); };
+  document.getElementById('e_del').onclick = ()=>{ if (confirm('删除这笔流水？')) { delExpense(state.editingExpense); } };
+  document.getElementById('e_save').onclick = saveExpense;
+
+  openMask('expMask');
+  setTimeout(()=>document.getElementById('e_amount').focus(), 120);
+}
+
+/* 重绘分摊人 chip（供勾选切换与「全选/清空」共用；不重置草稿） */
+function paintParts(){
+  const r = route(state.detailId);
+  document.getElementById('e_parts').innerHTML = travelers(r.id).map(t=>{
+    const on = state.draft.parts.includes(t.id);
+    return `<div class="chip has-tick${on?' active':''}" data-s="${t.id}">${on?'<span class="tick">✓</span>':''}${esc(t.name)}</div>`;
+  }).join('');
+  document.querySelectorAll('#e_parts [data-s]').forEach(c=>c.onclick=()=>{
+    const id = c.dataset.s, i = state.draft.parts.indexOf(id);
+    if (i>=0) state.draft.parts.splice(i,1); else state.draft.parts.push(id);
+    paintParts();
+  });
+  syncSplitHint();
+}
+
+function syncSplitHint(){
+  const r = route(state.detailId);
+  const amt = parseFloat(state.draft.amount)||0;
+  const n = state.draft.parts.length;
+  const h = document.getElementById('e_hint');
+  if (!(amt>0)) { h.className='split-hint'; h.textContent = n ? `已选 ${n} 人参与分摊，输入金额后显示每人应付` : '请选择参与分摊的人'; return; }
+  if (!n) { h.className='split-hint warn'; h.textContent = '⚠ 未选择分摊人：这笔将不计入任何人的应分担（仅记录实付）'; return; }
+  const per = amt/n;
+  const payer = tv(r.id, state.draft.payer);
+  h.className='split-hint';
+  h.innerHTML = `${n} 人平分，每人 <b style="font-size:15px">¥${fmt(per)}</b>${payer?` · 由 ${esc(payer.name)} 垫付`:''}`;
+}
+
+function saveExpense(){
+  const r = route(state.detailId);
+  const amt = parseFloat(state.draft.amount);
+  if (!(amt>0)) return toast('请填写大于 0 的金额');
+  /* 允许 0 位分摊人：语义为「纯记录本人实付，不作 AA 依据」，表单内已给橙色告警提示，此处直接保存 */
+  const list = expenses(r.id);
+  const payload = {
+    category: state.draft.category, amount: amt, spent_on: state.draft.spent_on,
+    title: state.draft.title.trim() || state.draft.category, payer: state.draft.payer,
+    /* split_mode：equal=按分摊人均分；none=不计入分摊（纯记录本人实付，作 AA 依据时跳过） */
+    split_mode: state.draft.parts.length ? 'equal' : 'none',
+    parts: state.draft.parts.slice(), note: state.draft.note.trim()
+  };
+  if (state.editingExpense) {
+    const e = list.find(x=>x.id===state.editingExpense); Object.assign(e, payload);
+    toast('已更新流水');
+  } else {
+    list.push(Object.assign({ id:'e'+Date.now().toString(36) }, payload));
+    toast(`已记一笔 ¥${fmt(amt)}`);
+  }
+  state.editingExpense=null; closeMask('expMask');
+  drawDetail(); render();
+}
+function delExpense(id){
+  const r = route(state.detailId);
+  DB.expenses[r.id] = expenses(r.id).filter(x=>x.id!==id);
+  closeMask('expMask'); drawDetail(); render(); toast('已删除');
+}
+
+/* =========================================================================
+   同行人管理
+   ========================================================================= */
+function openTravelers(){
+  const r = route(state.detailId);
+  const ts = travelers(r.id);
+  document.getElementById('t_people').textContent = (r.people||'—') + ' 人';
+  document.getElementById('t_count').textContent = ts.length + ' 人' + (ts.length && (parseFloat(r.people)||0)!==ts.length ? '（与人数不一致）' : '');
+  document.getElementById('t_list').innerHTML = ts.map((t,i)=>`<div class="chip">
+    <span class="tv tv-sm" style="background:${tvColor(i)};margin-right:4px">${esc(initial(t.name))}</span>${esc(t.name)}${t.is_self?'·我':''}
+    ${t.is_self?'':`<span data-rm="${t.id}" style="margin-left:6px;color:var(--danger);font-weight:800;cursor:pointer">×</span>`}</div>`).join('')
+    || '<span style="color:var(--muted);font-size:13px">暂无同行人</span>';
+  document.querySelectorAll('#t_list [data-rm]').forEach(x=>x.onclick=()=>{
+    const used = expenses(r.id).filter(e=>e.payer===x.dataset.rm || (e.parts||[]).includes(x.dataset.rm));
+    if (used.length && !confirm(`该同行人已被 ${used.length} 笔流水引用，移除后这些流水需重新指定分摊人。确定移除？`)) return;
+    DB.travelers[r.id] = travelers(r.id).filter(t=>t.id!==x.dataset.rm);
+    openTravelers(); drawDetail(); render();
+  });
+  document.getElementById('t_new').value='';
+  document.getElementById('t_add').onclick = ()=>{
+    const raw = document.getElementById('t_new').value.trim();
+    if (!raw) return toast('请输入姓名');
+    const names = raw.split(/[,，、\s]+/).filter(Boolean);
+    names.forEach(n=>{
+      const id = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
+      travelers(r.id).push({ id, name:n, is_self:0 });
+    });
+    toast('已添加 ' + names.length + ' 位同行人');
+    openTravelers(); render();
+  };
+  openMask('tvMask');
+}
+
+/* =========================================================================
+   弹层 / 表单工具
+   ========================================================================= */
+function openMask(id){ document.getElementById(id).classList.add('open'); }
+function closeMask(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeMask(b.dataset.close));
+/* 新增弹层（formMask / aiChatMask）在文档中静态存在，加载时一并绑定 */
+document.querySelectorAll('.mask').forEach(m=>m.onclick=(e)=>{ if(e.target===m) m.classList.remove('open'); });
+function setVal(id,v){ const el=document.getElementById(id); if(el) el.value = (v==null?'':v); }
+function bind(id,ev,fn){ const el=document.getElementById(id); if(el) el['on'+ev]=()=>fn(el.value); }
+
+/* =========================================================================
+   原型操作条
+   ========================================================================= */
+/* 原型操作条：仅保留「重置演示数据」（正式产品统一流水口径，无模式切换） */
+/* AI 权限开关：真实项目中 AI 按钮仅对「管理后台 → AI 配置 → 启用用户」名单内的账号可见 */
+document.querySelectorAll('.proto-bar .pb[data-ai]').forEach(b=>b.onclick=()=>{
+  AI_ENABLED = b.dataset.ai === '1';
+  document.querySelectorAll('.proto-bar .pb[data-ai]').forEach(x=>x.classList.toggle('on', x===b));
+  syncAiBtns();
+  toast(AI_ENABLED ? 'AI 已启用：编辑路线页显示「AI 规划 / 调整」按钮' : 'AI 未启用：编辑路线页隐藏 AI 按钮（与真实权限一致）');
+});
+
+document.querySelectorAll('.proto-bar .pb[data-demo="reset"]').forEach(b=>b.onclick=()=>{
+  DB = seed();
+  state = { detailId:null, tab:'ledger', catFilter:'全部', editingExpense:null, draft:null };
+  closeMask('detailMask'); closeMask('formMask'); closeMask('expMask'); closeMask('tvMask');
+  render(); toast('演示数据已重置');
+});
+
+/* =========================================================================
+   既有功能：新增 / 编辑路线 + AI 规划 + AI 调整
+   -------------------------------------------------------------------------
+   本段按 public/index.html(#formMask/#aiChatMask) 与 public/assets/app.js
+   的既有交互 1:1 复刻，目的：让「新方案会不会动到它们」可视化评审。
+   差异说明（与真实实现的唯一不同）：
+     · AI 调用为本地模拟（原型无后端），生成结果与真实模型无关；
+       真实契约见 PRD 6.x：POST /api/routes/ai-plan、POST /api/routes/ai-chat，
+       请求打到 OpenAI 兼容的 {api_base_url}/v1/chat/completions。
+     · 真实实现里 9 类花费入参是**嵌套 exp 对象**（db.js:220 `data.exp || {}`），
+       非平铺字段；本原型同步保持该契约。
+   ========================================================================= */
+const CURRENCY_OPTS = ['CNY','USD','EUR','JPY','HKD','TWD','KRW','THB','SGD','MYR','AUD','GBP'];
+const CSYM = { CNY:'¥', USD:'$', EUR:'€', JPY:'¥', HKD:'HK$', TWD:'NT$', KRW:'₩', THB:'฿', SGD:'S$', MYR:'RM', AUD:'A$', GBP:'£' };
+let AI_ENABLED = true;                 /* 对应「管理后台 → AI 配置 → 启用用户」名单 */
+let formState = { id:null, expReadonly:false };
+let aiChatState = { messages:[], history:[], pending:null, pendingNotes:'' };
+
+function csym(c){ return CSYM[c] || '¥'; }
+
+/* -------- 日期：开始/结束双日期输入 → 自动算天数（既有逻辑） -------- */
+function calcDays(start, end){
+  if (!start || !end) return 0;
+  const a = new Date(start), b = new Date(end);
+  if (isNaN(a) || isNaN(b)) return 0;
+  return Math.max(0, Math.round((b - a) / 86400000) + 1);
+}
+function dateRangeText(start, end){
+  if (!start && !end) return '';
+  return String(start).replace(/-/g,'/') + ' - ' + String(end).replace(/-/g,'/');
+}
+
+/* -------- 新增 / 编辑路线 -------- */
+function openForm(id){
+  const r = id ? route(id) : null;
+  formState.id = id;
+  document.getElementById('formTitle').textContent = id ? '编辑路线' : '新增路线';
+  setVal('f_name', r ? r.name : '');
+  setVal('f_year', r ? r.year : '2026');
+  setVal('f_start_date', r ? r.start_date : '');
+  setVal('f_end_date', r ? r.end_date : '');
+  setVal('f_type', r ? r.type : '自由行');
+  setVal('f_people', r ? r.people : 2);
+  setVal('f_budget_total', r ? r.budget_total : '');
+  setVal('f_budget_daily', r ? r.budget_daily : '');
+  setVal('f_dest', r ? r.dest : '');
+  setVal('f_scenic', r ? r.scenic : '');
+  setVal('f_hotel', r ? r.hotel : '');
+  setVal('f_notes', r ? r.notes : '');
+  setVal('f_days', r ? r.days : '');
+  document.getElementById('f_currency').innerHTML = CURRENCY_OPTS.map(c=>`<option value="${c}">${c}</option>`).join('');
+  setVal('f_currency', r ? r.currency : 'CNY');
+  buildExpInputs(r);
+  document.getElementById('formDelete').style.display = id ? '' : 'none';
+  syncAiBtns();
+  openMask('formMask');
+}
+
+/* -------- 花费明细：统一由流水派生，表单不再提供 9 类输入（与正式产品一致） -------- */
+function buildExpInputs(r){
+  formState.expReadonly = true;   /* 表单永不提交 exp */
+  const warn = document.getElementById('expLedgerWarn');
+  if (!warn) return;
+  warn.innerHTML = r
+    ? `9 类金额由 <b>${expenses(r.id).length} 笔流水</b>自动汇总，本表单不再手工填写。
+        <div style="margin-top:8px"><button class="btn btn-sm btn-line" id="expToLedger">去记流水</button></div>`
+    : `9 类花费改由「逐笔流水」自动汇总：保存路线后打开「查看 → 流水」记录每一笔消费，总额、人均与结算都会自动算好。`;
+  const g = document.getElementById('expToLedger');
+  if (g) g.onclick = () => { closeMask('formMask'); state.detailId = r.id; state.tab='ledger'; openMask('detailMask'); drawDetail(); };
+}
+
+function saveForm(){
+  const name = document.getElementById('f_name').value.trim();
+  if (!name) return toast('请填写路线名称');
+  const start = document.getElementById('f_start_date').value;
+  const end = document.getElementById('f_end_date').value;
+  const days = calcDays(start, end);
+  const obj = {
+    name, year: document.getElementById('f_year').value.trim(),
+    daterange: dateRangeText(start, end), start_date: start, end_date: end,
+    type: document.getElementById('f_type').value,
+    days: days > 0 ? days : (parseInt(document.getElementById('f_days').value, 10) || 0),
+    people: parseInt(document.getElementById('f_people').value, 10) || 0,
+    currency: document.getElementById('f_currency').value || 'CNY',
+    budget_total: parseFloat(document.getElementById('f_budget_total').value) || 0,
+    budget_daily: parseFloat(document.getElementById('f_budget_daily').value) || 0,
+    dest: document.getElementById('f_dest').value.trim(),
+    scenic: document.getElementById('f_scenic').value,
+    hotel: document.getElementById('f_hotel').value,
+    notes: document.getElementById('f_notes').value
+  };
+  /* 表单永不提交 exp：9 类金额统一由流水派生 */
+  if (formState.id) {
+    const r = route(formState.id);
+    Object.assign(r, obj);
+    toast('已保存');
+  } else {
+    const id = 'r' + Date.now().toString(36);
+    DB.routes.push({ id, is_seed:false, exp: {}, ...obj });
+    /* 新增时若填了同行人数，顺带生成同行人占位，便于后续开流水 */
+    const n = obj.people;
+    DB.travelers[id] = [{ id:'t1', name:'我（Kyson）', is_self:1 }];
+    for (let i=2;i<=n;i++) DB.travelers[id].push({ id:'t'+i, name:'同行人'+i, is_self:0 });
+    DB.expenses[id] = [];
+    toast('已新增路线，接下来可以逐笔记录花费');
+  }
+  closeMask('formMask');
+  render();
+}
+
+function delRoute(){
+  const r = route(formState.id);
+  if (!r) return;
+  if (!confirm(`删除路线「${r.name}」？其流水与同行人将一并删除。`)) return;
+  DB.routes = DB.routes.filter(x => x.id !== r.id);
+  delete DB.travelers[r.id]; delete DB.expenses[r.id];
+  closeMask('formMask'); closeMask('detailMask');
+  render(); toast('已删除路线');
+}
+
+/* -------- AI 按钮显隐：仅「已启用」账号可见（与真实权限规则一致） -------- */
+function syncAiBtns(){
+  const p = document.getElementById('aiPlanBtn');
+  const c = document.getElementById('aiChatBtn');
+  const scenic = document.getElementById('f_scenic');
+  if (p) p.style.display = AI_ENABLED ? '' : 'none';
+  /* 「调整」仅在已有行程内容时出现（既有规则） */
+  if (c) c.style.display = (AI_ENABLED && scenic && scenic.value.trim()) ? '' : 'none';
+}
+
+/* -------- AI 规划（真实：POST /api/routes/ai-plan） -------- */
+function aiPlan(){
+  if (!AI_ENABLED) return toast('当前账号未启用 AI 行程规划功能');
+  const start = document.getElementById('f_start_date').value;
+  const end = document.getElementById('f_end_date').value;
+  const dest = document.getElementById('f_dest').value.trim();
+  const days = calcDays(start, end);
+  if (!start || !end) return toast('请填写出行起止日期');
+  if (!dest) return toast('请填写主要目的地');
+  if (days <= 0) return toast('天数无效');
+  const btn = document.getElementById('aiPlanBtn');
+  btn.disabled = true;
+  toast('AI 正在生成行程…');
+  setTimeout(() => {
+    document.getElementById('f_scenic').value = mockPlan(dest, days, start);
+    const filled = fillAiNotes(mockNotes(dest));
+    btn.disabled = false;
+    syncAiBtns();
+    toast(filled
+      ? 'AI 行程已生成，注意事项与美食推荐已写入备注'
+      : 'AI 行程已生成，可点「调整」继续修改，满意后保存路线');
+  }, 900);
+}
+
+/* AI 生成的「注意事项 / 美食推荐」写入备注：已有内容则追加（不覆盖），并做幂等判断 */
+function fillAiNotes(notes){
+  const text = String(notes || '').trim();
+  if (!text) return false;
+  const box = document.getElementById('f_notes');
+  if (!box) return false;
+  const cur = box.value.trim();
+  if (!cur) { box.value = text; return true; }
+  if (cur.includes(text)) return true;
+  box.value = cur + '\n\n—— AI 补充 ——\n' + text;
+  return true;
+}
+/* 模拟模型输出的注意事项与美食推荐（真实实现由模型按【注意事项】【美食推荐】两节返回） */
+function mockNotes(dest){
+  const first = (dest.split(/[、,，]/)[0] || dest).trim();
+  return `【注意事项】\n- ${first}昼夜温差大，即使夏季也建议带一件外套\n- 紫外线较强，备好防晒与墨镜\n- 热门景点建议提前一天线上预约门票\n- 高原/山区行程抵达当天避免剧烈运动\n\n【美食推荐】\n- 当地特色小吃街：适合傍晚边逛边吃\n- ${first}老字号面食：人均 30-50 元\n- 手抓羊肉 / 地方炖菜：人均 60-80 元`;
+}
+/* 模拟模型输出（真实实现由 OpenAI 兼容接口返回纯文本行程） */
+function mockPlan(dest, days, start){
+  const spots = ['抵达并熟悉周边', '主要景点 ①', '主要景点 ②', '古镇/老城漫步', '自然风光一日', '博物馆与市集', '休闲购物 + 返程'];
+  const first = (dest.split(/[、,，]/)[0] || dest).trim();
+  const lines = [];
+  for (let i = 1; i <= days; i++) {
+    lines.push(`Day${i} ${i === 1 ? '抵达' + first : first + ' ' + (spots[(i - 1) % spots.length])}`);
+  }
+  return lines.join('\n');
+}
+
+/* -------- AI 调整（真实：POST /api/routes/ai-chat，可多轮） -------- */
+function openAiChat(){
+  const cur = document.getElementById('f_scenic').value.trim();
+  if (!cur) return toast('请先在「景点路线」填写或生成行程');
+  aiChatState.messages = [];
+  aiChatState.history = [];
+  aiChatState.pending = null;
+  document.getElementById('aiChatCurrentContent').textContent = cur;
+  document.getElementById('aiChatCurrentContent').style.display = 'none';
+  renderAiChatMsgs();
+  document.getElementById('aiChatInput').value = '';
+  document.getElementById('aiChatApplyBar').style.display = 'none';
+  openMask('aiChatMask');
+}
+
+function renderAiChatMsgs(){
+  const box = document.getElementById('aiChatMessages');
+  if (!aiChatState.messages.length) {
+    box.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:20px 0">
+      输入调整要求，AI 会基于当前行程进行修改<br>
+      <span style="font-size:12px">例如：把第二天的故宫换成颐和园、增加美食推荐、第一天太赶了精简一下</span></div>`;
+  } else {
+    box.innerHTML = aiChatState.messages.map(m=>{
+      const me = m.role === 'user';
+      return `<div style="display:flex;justify-content:${me?'flex-end':'flex-start'};margin-bottom:10px">
+        <div style="max-width:82%;background:${me?'var(--primary)':'#fff'};color:${me?'#fff':'var(--text)'};
+          border:1px solid ${me?'var(--primary)':'var(--line)'};border-radius:12px;padding:9px 11px;font-size:13.5px;
+          line-height:1.6;white-space:pre-wrap;word-break:break-word">${esc(m.content)}</div></div>`;
+    }).join('');
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+function sendAiChat(){
+  if (!AI_ENABLED) return toast('当前账号未启用 AI 行程规划功能');
+  const ta = document.getElementById('aiChatInput');
+  const msg = ta.value.trim();
+  if (!msg) return toast('请输入调整要求');
+  const dest = document.getElementById('f_dest').value.trim();
+  const start = document.getElementById('f_start_date').value;
+  const end = document.getElementById('f_end_date').value;
+  if (!dest) return toast('请先填写主要目的地');
+  if (!start || !end) return toast('请先填写出行起止日期');
+
+  const cur = document.getElementById('f_scenic').value.trim();
+  aiChatState.messages.push({ role:'user', content: msg });
+  /* 真实实现只带末尾 6 条历史，避免 prompt 过长 */
+  aiChatState.history.push({ role:'user', content: msg });
+  if (aiChatState.history.length > 6) aiChatState.history = aiChatState.history.slice(-6);
+  aiChatState.messages.push({ role:'assistant', content:'正在按你的要求调整…' });
+  renderAiChatMsgs();
+  ta.value = '';
+  const send = document.getElementById('aiChatSend');
+  send.disabled = true;
+
+  setTimeout(() => {
+    const revised = mockAdjust(cur, msg);
+    aiChatState.pending = revised;
+    /* 仅当用户明确提到美食/注意事项时才更新备注，贴近真实实现的「按需更新」 */
+    aiChatState.pendingNotes = /美食|吃|餐厅|注意事项|提醒|注意/.test(msg) ? mockNotes(dest) : '';
+    aiChatState.messages[aiChatState.messages.length - 1] = { role:'assistant', content: revised };
+    renderAiChatMsgs();
+    send.disabled = false;
+    const bar = document.getElementById('aiChatApplyBar');
+    bar.style.display = 'flex';
+  }, 900);
+}
+
+function mockAdjust(scenic, message){
+  const lines = scenic.split('\n').filter(Boolean);
+  if (!lines.length) return scenic;
+  /* 模拟「基于当前行程 + 指令返回完整版本」：改写第 2 天以体现调整生效 */
+  const idx = lines.length > 1 ? 1 : 0;
+  const short = message.length > 18 ? message.slice(0, 18) + '…' : message;
+  lines[idx] = lines[idx] + `（已按「${short}」调整）`;
+  return lines.join('\n');
+}
+
+function applyAiChat(){
+  if (!aiChatState.pending) return;
+  document.getElementById('f_scenic').value = aiChatState.pending;
+  /* 调整若同时更新了注意事项 / 美食推荐，一并写入备注 */
+  const filled = aiChatState.pendingNotes ? fillAiNotes(aiChatState.pendingNotes) : false;
+  aiChatState.pending = null;
+  aiChatState.pendingNotes = null;
+  syncAiBtns();
+  closeMask('aiChatMask');
+  toast(filled ? '已应用此版本，备注同步更新，记得保存路线' : '已应用此版本，记得保存路线');
+}
+
+/* -------- 表单事件绑定（每次打开重绑） -------- */
+function bindFormEvents(){
+  const on = (id, ev, fn) => { const e = document.getElementById(id); if (e) e['on' + ev] = fn; };
+  const recalc = () => {
+    const d = calcDays(document.getElementById('f_start_date').value, document.getElementById('f_end_date').value);
+    if (d > 0) document.getElementById('f_days').value = d;
+  };
+  on('f_start_date', 'change', recalc);
+  on('f_end_date', 'change', recalc);
+  on('f_scenic', 'input', () => syncAiBtns());
+  on('aiPlanBtn', 'click', aiPlan);
+  on('aiChatBtn', 'click', openAiChat);
+  on('formSave', 'click', saveForm);
+  on('formDelete', 'click', delRoute);
+  on('aiChatSend', 'click', sendAiChat);
+  on('aiChatApply', 'click', applyAiChat);
+  on('aiChatCurrentToggle', 'click', () => {
+    const c = document.getElementById('aiChatCurrentContent');
+    c.style.display = c.style.display === 'none' ? 'block' : 'none';
+  });
+}
+
+bindFormEvents();
+render();
+</script>
+</body>
+</html>

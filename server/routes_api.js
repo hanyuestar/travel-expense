@@ -56,6 +56,16 @@ function findVisible(id, userId) {
     .get(id, userId) || null;
 }
 
+/* 批量取各路线的流水笔数（列表卡片徽标用） */
+function expenseCounts(ids) {
+  const out = {};
+  if (!ids.length) return out;
+  const ph = ids.map(() => '?').join(',');
+  db().prepare(`SELECT route_id, COUNT(*) AS c FROM expenses WHERE route_id IN (${ph}) GROUP BY route_id`)
+    .all(...ids).forEach(r => { out[r.route_id] = r.c; });
+  return out;
+}
+
 /* 全量去重年份（不受 year 过滤，确保年份胶囊完整）；hideSeed 时排除种子路线年份 */
 function routesYears(res, userId, query) {
   const hideSeed = query.hideSeed === '1';
@@ -103,10 +113,11 @@ async function handle(req, res, url, body) {
     if (!dest) return fail(res, 400, '请填写主要目的地');
     if (days <= 0) return fail(res, 400, '天数无效');
     try {
-      const itinerary = await aiService.planItinerary(cfg, { startDate, endDate, dest, days });
+      /* 返回 { scenic, notes }：notes 为「注意事项 + 美食推荐」，前端回填到备注 */
+      const r = await aiService.planItinerary(cfg, { startDate, endDate, dest, days });
       dbModule.audit(user.id, 'ai_plan_route', 'routes', null,
         `AI 规划行程：${dest}（${startDate} ~ ${endDate}，${days}天）`, req.socket.remoteAddress || '');
-      return ok(res, { scenic: itinerary });
+      return ok(res, { scenic: r.scenic, notes: r.notes });
     } catch (e) {
       return fail(res, 400, 'AI 行程规划失败：' + e.message);
     }
@@ -137,13 +148,15 @@ async function handle(req, res, url, body) {
     if (days <= 0) return fail(res, 400, '天数无效');
     /* 历史对话长度限制，避免 prompt 过长 */
     const trimmedHistory = history.slice(-6);
+    /* current_notes：当前备注内容（含上次生成的注意事项/美食推荐），供模型增量更新 */
+    const currentNotes = String(b.current_notes || '').trim().slice(0, 4000);
     try {
-      const itinerary = await aiService.adjustItinerary(cfg, {
-        currentScenic, message, dest, startDate, endDate, days, history: trimmedHistory
+      const r = await aiService.adjustItinerary(cfg, {
+        currentScenic, currentNotes, message, dest, startDate, endDate, days, history: trimmedHistory
       });
       dbModule.audit(user.id, 'ai_chat_route', 'routes', null,
         `AI 调整行程：${dest}，指令：${message.slice(0, 50)}`, req.socket.remoteAddress || '');
-      return ok(res, { scenic: itinerary });
+      return ok(res, { scenic: r.scenic, notes: r.notes });
     } catch (e) {
       return fail(res, 400, 'AI 行程调整失败：' + e.message);
     }
@@ -159,7 +172,13 @@ async function handle(req, res, url, body) {
       page: query.page,
       pageSize: query.pageSize
     });
-    return ok(res, { list: rows.map(r => dbModule.routeToJson(r)), total, page, pageSize });
+    /* 附上流水笔数（列表卡片徽标用），一次分组查询避免 N+1 */
+    const ids = rows.map(r => r.id);
+    const counts = expenseCounts(ids);
+    return ok(res, {
+      list: rows.map(r => Object.assign(dbModule.routeToJson(r), { expense_count: counts[r.id] || 0 })),
+      total, page, pageSize
+    });
   }
 
   /* GET /api/routes/years —— 返回当前用户可见的全量去重年份（受 hideSeed 影响，不受 year 过滤）
@@ -241,44 +260,139 @@ async function handle(req, res, url, body) {
     return ok(res, { created, skipped, duplicates, errors });
   }
 
-  /* /:id 详情/更新/删除 + /:id/share 只读分享 */
+  /* /:id 详情/更新/删除 + 子资源：share（只读分享）/ travelers / expenses / settle */
   if (rest.startsWith('/')) {
-    const isShare = rest.endsWith('/share');
-    const id = decodeURIComponent((isShare ? rest.slice(0, -6) : rest).slice(1));
+    const segs = rest.slice(1).split('/').map(s => decodeURIComponent(s));
+    const id = segs[0];
+    const sub = segs[1] || '';
+    const subId = segs[2] || '';
     if (!id) return fail(res, 404, '路线不存在');
     const row = findVisible(id, user.id);
     if (!row) return fail(res, 404, '路线不存在');
 
-    /* 分享令牌管理：仅本人或管理员 */
-    if (isShare) {
-      const own = row.owner_id === user.id || user.role === 'admin';
+    /* 示例路线对普通用户只读；管理员可管理种子 */
+    const isOwn = row.owner_id === user.id || user.role === 'admin';
+    const seedReadonly = row.is_seed && user.role !== 'admin';
+
+    /* ---------- 分享令牌管理：仅本人或管理员 ---------- */
+    if (sub === 'share') {
       if (method === 'GET') {
-        if (!own) return fail(res, 403, '无权查看该路线的分享', { code: 'FORBIDDEN' });
+        if (!isOwn) return fail(res, 403, '无权查看该路线的分享', { code: 'FORBIDDEN' });
         return ok(res, { token: dbModule.getShareToken(id) });
       }
       if (method === 'POST') {
-        if (!own) return fail(res, 403, '无权分享该路线', { code: 'FORBIDDEN' });
+        if (!isOwn) return fail(res, 403, '无权分享该路线', { code: 'FORBIDDEN' });
         const token = crypto.randomBytes(16).toString('hex');
         dbModule.setShareToken(id, token);
         return ok(res, { token });
       }
       if (method === 'DELETE') {
-        if (!own) return fail(res, 403, '无权取消该路线的分享', { code: 'FORBIDDEN' });
+        if (!isOwn) return fail(res, 403, '无权取消该路线的分享', { code: 'FORBIDDEN' });
         dbModule.clearShareToken(id);
         return ok(res, true);
       }
       return fail(res, 404, '接口不存在');
     }
 
+    /* ---------- 逐笔消费流水 + AA 分账 ----------
+     * 读操作：与路线同样的可见性（本人 + 示例对全员可见）
+     * 写操作：示例路线只读（普通用户）+ 非本人 403，与路线 CRUD 保持一致 */
+    if (sub === 'travelers' || sub === 'expenses' || sub === 'settle') {
+      if (method !== 'GET' && seedReadonly) {
+        return fail(res, 403, '示例路线为系统数据，仅可查看', { code: 'FORBIDDEN' });
+      }
+      if (method !== 'GET' && !isOwn) {
+        return fail(res, 403, '无权修改该路线的流水', { code: 'FORBIDDEN' });
+      }
+      const ip = req.socket.remoteAddress || '';
+      try {
+        /* ----- 结算 ----- */
+        if (sub === 'settle') {
+          if (method !== 'GET') return fail(res, 404, '接口不存在');
+          return ok(res, dbModule.settle(id));
+        }
+
+        /* ----- 同行人 ----- */
+        if (sub === 'travelers') {
+          if (method === 'GET' && !subId) {
+            return ok(res, { list: dbModule.listTravelers(id) });
+          }
+          if (method === 'POST' && !subId) {
+            const raw = body && (Array.isArray(body.names) ? body.names : (body.name ? [body.name] : []));
+            if (!raw.length) return fail(res, 400, '请填写同行人姓名');
+            if (raw.length > 50) return fail(res, 400, '一次最多添加 50 人');
+            const r = dbModule.addTravelers(id, row.owner_id, raw);
+            dbModule.audit(user.id, 'add_travelers', 'routes', id, `新增同行人 ${r.created} 人`, ip);
+            return ok(res, r);
+          }
+          if (method === 'PATCH' && subId) {
+            if (!body || typeof body !== 'object') return fail(res, 400, '参数不正确');
+            const t = dbModule.updateTraveler(subId, id, body);
+            if (!t) return fail(res, 404, '同行人不存在');
+            return ok(res, t);
+          }
+          if (method === 'DELETE' && subId) {
+            const force = query.force === '1';
+            const r = dbModule.deleteTraveler(subId, id, force);
+            if (!r.ok && r.code === 'NOT_FOUND') return fail(res, 404, '同行人不存在');
+            if (!r.ok && r.code === 'IN_USE') {
+              return fail(res, 409, `该同行人已被 ${r.affected} 笔流水引用`, { code: 'TRAVELER_IN_USE', affected: r.affected });
+            }
+            dbModule.audit(user.id, 'delete_traveler', 'routes', id, `删除同行人（影响 ${r.affected} 笔）`, ip);
+            return ok(res, r);
+          }
+          return fail(res, 404, '接口不存在');
+        }
+
+        /* ----- 流水 ----- */
+        if (method === 'GET' && !subId) {
+          return ok(res, dbModule.listExpenses(id, {
+            category: query.category || '', payer: query.payer || '',
+            from: query.from || '', to: query.to || '',
+            page: query.page, pageSize: query.pageSize
+          }));
+        }
+        if (method === 'POST' && !subId) {
+          if (!body || typeof body !== 'object') return fail(res, 400, '参数不正确');
+          const rec = dbModule.insertExpense(id, row.owner_id, body);
+          dbModule.audit(user.id, 'add_expense', 'routes', id, `记录流水 ${rec.category} ${rec.amount}`, ip);
+          return created(res, rec);
+        }
+        if (method === 'POST' && subId === 'bulk-delete') {
+          const n = dbModule.bulkDeleteExpenses(id, body && body.ids);
+          dbModule.audit(user.id, 'bulk_delete_expenses', 'routes', id, `批量删除流水 ${n} 笔`, ip);
+          return ok(res, { deleted: n });
+        }
+        if (method === 'PATCH' && subId) {
+          if (!body || typeof body !== 'object') return fail(res, 400, '参数不正确');
+          const rec = dbModule.updateExpense(subId, id, body);
+          if (!rec) return fail(res, 404, '流水不存在');
+          dbModule.audit(user.id, 'update_expense', 'routes', id, `修改流水 ${rec.category} ${rec.amount}`, ip);
+          return ok(res, rec);
+        }
+        if (method === 'DELETE' && subId) {
+          if (!dbModule.deleteExpense(subId, id)) return fail(res, 404, '流水不存在');
+          dbModule.audit(user.id, 'delete_expense', 'routes', id, '删除一笔流水', ip);
+          return ok(res, true);
+        }
+        return fail(res, 404, '接口不存在');
+      } catch (e) {
+        /* 校验类错误统一 400，并回传机器可读 code（避免落到全局 500） */
+        if (e && e.code && /^(INVALID_|DUPLICATE_)/.test(e.code)) return fail(res, 400, e.message, { code: e.code });
+        throw e;
+      }
+    }
+
+    /* ---------- 路线本体 ---------- */
+    if (sub) return fail(res, 404, '接口不存在');
+
     if (method === 'GET') {
       return ok(res, dbModule.routeToJson(row));
     }
 
-    /* 写操作：种子示例对普通用户只读；管理员可管理种子 */
-    if (row.is_seed && user.role !== 'admin') {
+    if (seedReadonly) {
       return fail(res, 403, '示例路线为系统数据，仅可查看', { code: 'FORBIDDEN' });
     }
-    const isOwn = row.owner_id === user.id || user.role === 'admin';
 
     if (method === 'PUT') {
       if (!isOwn) return fail(res, 403, '无权修改该路线', { code: 'FORBIDDEN' });

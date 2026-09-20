@@ -1,6 +1,6 @@
 # 旅行路线 · 经费台（travel-expense）
 
-一个**自托管的旅行路线 + 经费管理工作台（多用户版）**：管理历年出行路线，按 9 类花费拆分（交通 / 机票 / 高铁 / 住宿 / 餐饮 / 门票 / 团费 / 购物 / 其他），按年度做统计复盘。**数据存在你自己的设备上**，多用户数据互相隔离，手机/电脑自适应。
+一个**自托管的旅行路线 + 经费管理工作台（多用户版）**：管理历年出行路线，**逐笔记录每笔消费**（9 类花费自动汇总），多人出行可做 **AA 分账**算出「谁该付谁多少」，并按年度做统计复盘。**数据存在你自己的设备上**，多用户数据互相隔离，手机/电脑自适应。
 
 > 仓库内置若干**示例路线**供快速体验；支持邮箱 / 账户名注册登录，管理员可统一治理（用户管理、邮件配置、站点设置、统计、审计）。
 
@@ -12,14 +12,17 @@
 |---|---|
 | **用户体系** | 邮箱注册（验证码）/ 账户名注册；登录支持「账号密码 / 邮箱验证码 / 邮箱密码」三种方式；服务端会话，封禁即时生效 |
 | **路线管理** | 录入 / 查看所有路线；字段含年份、出行日期、类型、天数、同行人数、目的地、景点路线（按天）、住宿位置；按年份快速筛选（年份选项完整，不受分页影响）、关键字搜索（路线名 / 目的地 / 景点）；**列表分页加载**（上一页 / 下一页，显示共 N 条） |
-| **花费明细** | 每条路线按 **9 类**拆分花费，自动算总额与人均；未填计 0，可随时补 |
+| **逐笔消费流水** | 每条路线**逐笔记账**：日期 / 类目 / 金额 / 事项 / 备注；按日期倒序分组（含当日小计），可按 9 类筛选；点击任意一笔即可编辑；**9 类花费与总额、人均、预算全部自动汇总**，无需手工填表 |
+| **AA 分账结算** | 登记**同行人**名单，每笔消费指定「谁付的钱 / 谁参与分摊」，一键算出每人**实付 / 应负担 / 差额**，并给出**最少转账方案**（笔数 ≤ 人数 − 1）；支持「部分人分摊」（如仅 2 人去的景点）与「不计入分摊」（自购纯记录） |
+| **花费汇总** | 9 类花费由流水自动派生，实时反映在卡片、详情、导出与分享页；总额与人均随记随更新 |
 | **多币种** | 每条路线可选币种（CNY/USD/EUR/JPY 等 20+），统计按**站点本位币**自动换算聚合（内置汇率表兜底，可配置实时汇率源）；首页统计卡/图表统一显示本位币 |
 | **预算管控** | 每条路线可设总预算 / 日均预算，卡片显示进度条、超支红色高亮；首页统计卡显示总预算与结余 |
 | **年度复盘** | 按年汇总总花费 / 次数 / 次均 / 总天数；分类占比环形图 + 逐年趋势柱状图（手写 SVG，零外链） |
-| **数据导出导入** | 个人 CSV 导出（Excel 可开）/ JSON 导出导入（可往返备份还原）；**导入按「名称 + 年份 + 目的地」自动去重**（已存在跳过并计入 `duplicates`）；管理员全站 CSV 导出（含用户名，审计留痕） |
+| **数据导出导入** | 个人 CSV 导出（Excel 可开）/ JSON 导出导入（可往返备份还原）；**导入按「名称 + 年份 + 目的地」自动去重**（已存在跳过并计入 `duplicates`）；管理员全站 CSV 导出（含用户名，审计留痕）。⚠️ 导入导出只含 9 类汇总金额，**不含逐笔流水**（流水请用管理后台「数据库备份」留存） |
 | **只读分享** | 本人路线可生成一次性只读链接（`/share/<token>`），无登录可看，随时可重置 / 撤销 |
 | **数据隔离** | 每位用户仅见自己的路线；系统示例（`is_seed=1`）全员可见但普通用户只读 |
-| **管理后台** | 平台总览、用户管理（在线/封禁/提权）、邮件服务器配置、站点设置（开放注册/站名/公告/本位币）、**数据库备份下载**、操作审计日志 |
+| **AI 行程规划** | 配好 AI 接口后（管理后台 → AI 配置），路线编辑页可一键生成按天行程；**同时产出「注意事项」与「美食推荐」并自动写入备注**（备注已有内容时追加，不覆盖你自己的备注）；支持对话式多轮调整 |
+| **管理后台** | 平台总览、用户管理（在线/封禁/提权）、邮件服务器配置、站点设置（开放注册/站名/公告/本位币）、AI 配置、**数据库备份下载**、操作审计日志 |
 | **自适应** | 手机单列、PC 多列；浏览器「添加到主屏幕」即伪原生 App |
 | **强健性与安全** | 会话服务端 30 天滑动 TTL（过期自动失效）；登录限流（IP + 账户名，含 IP 全局限流 30 次 / 10 分钟）；实时汇率可配置 API 定时刷新（兜底静态表）；`/health` 含 DB 探活（DB 故障返 503）；访问日志 + 优雅关闭（SIGTERM/SIGINT）；CSP / X-Frame-Options / Referrer-Policy / HSTS 安全头；封禁用户时清除其分享令牌 |
 
@@ -33,11 +36,22 @@
 
 👉 **[点此体验在线 Demo](https://htmlpreview.github.io/?https://github.com/hanyuestar/travel-expense/blob/main/demo/index.html)**
 
-演示版为**单用户 localStorage 版**，内置示例数据，可随意新增 / 编辑 / 删除路线、查看年度统计；所有改动仅存于当前浏览器，不会上传任何服务器。
+演示版为**单用户 localStorage 版**，内置示例数据，可随意新增 / 编辑 / 删除路线、**逐笔记账并体验 AA 分账**（示例「周末近郊轻旅行」已预置同行人与流水）、查看年度统计；所有改动仅存于当前浏览器，不会上传任何服务器。
 
 ---
 
 ## 📌 版本变更记录
+
+### v1.1.0（2026-09-20）
+新增**逐笔消费流水 + AA 分账**，并增强 AI 行程规划（向后兼容 v1.0.9 数据，启动时自动迁移，无需手工操作）：
+- **逐笔记账**：每条路线可逐笔记录消费（日期 / 类目 / 金额 / 事项 / 备注），按日期分组展示并显示当日小计，支持按 9 类筛选、点击编辑、删除。
+- **9 类花费改为自动汇总**：路线表单不再手工填写 9 类花费，改由流水自动派生；总额、人均、预算进度、分类占比、年度统计、导出与分享页全部随之自动更新。
+- **AA 分账**：新增同行人名单与结算页 —— 每笔消费可指定付款人与分摊人，自动算出每人实付 / 应负担 / 差额，并给出**最少转账方案**（笔数 ≤ 人数 − 1）；支持「部分人分摊」与「不计入分摊（自购纯记录）」。
+- **AI 规划增强**：AI 规划行程时**同时生成「注意事项」与「美食推荐」**，自动写入备注（已有备注则追加，不覆盖）；AI 对话式调整也可同步更新这两部分。
+- **旧数据自动迁移**：升级后首次启动，会把历史路线的 9 类金额一次性转为「期初（历史数据）」流水，金额与统计口径完全不变；期初流水不参与 AA 结算（历史数据无从得知付款人，不伪造）。
+- **修复**：卡片「预算进度条」此前因样式缺失在线上不可见，本次补齐样式。
+- 验证：全量回归 **9 个脚本**（含新增的流水冒烟与 AI 冒烟）+ 真机端到端断言全部通过。
+- 安卓客户端 APK 随版本发布（GitHub Release 附件 `app-debug.apk`）。
 
 ### v1.0.9（2026-09-17）
 缺陷修复与体验优化（向后兼容 v1.0.8 数据，无需迁移）：
@@ -102,7 +116,7 @@ mkdir -p /volume1/docker/travel
 cd /volume1/docker/travel
 curl -O https://raw.githubusercontent.com/hanyuestar/travel-expense/main/docker-compose.yml
 
-# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.0.9）
+# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.1.0）
 docker compose up -d
 
 # 3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
@@ -113,7 +127,7 @@ docker compose up -d
 ```yaml
 services:
   travel-expense:
-    image: ghcr.io/hanyuestar/travel-expense:v1.0.9
+    image: ghcr.io/hanyuestar/travel-expense:v1.1.0
     container_name: travel-expense
     restart: unless-stopped
     ports:
@@ -148,7 +162,7 @@ docker run -d --name travel-expense \
   -p 8108:3000 \
   -v /your/path/data:/data \
   --restart unless-stopped \
-  ghcr.io/hanyuestar/travel-expense:v1.0.9
+  ghcr.io/hanyuestar/travel-expense:v1.1.0
 ```
 
 ### 方式 C：手动运行（无 Docker，需 Node 18+）
@@ -166,8 +180,8 @@ node app.js            # 默认端口 3000；后端自动托管 public/ 前端�
 把网页版打包成手机原生 APP：桌面常驻图标、离线可开 UI、登录后像原生应用一样使用。APP 通过 `fetch` **直连你自托管的服务器**，数据仍全在你自己的服务器上，APP 本身不另存数据。
 
 ### 快速使用（已发布 APK）
-- **下载**：[`app-debug.apk`（v1.0.9）](https://github.com/hanyuestar/travel-expense/releases/download/v1.0.9/app-debug.apk)
-- 备用地址：<https://github.com/hanyuestar/travel-expense/releases/tag/v1.0.9>
+- **下载**：[`app-debug.apk`（v1.1.0）](https://github.com/hanyuestar/travel-expense/releases/download/v1.1.0/app-debug.apk)
+- 备用地址：<https://github.com/hanyuestar/travel-expense/releases/tag/v1.1.0>
 - 手机允许「未知来源」安装后打开即可——**服务器地址已内置，打开即用，无需填写**。
 
 > 该发布包已内置作者服务器地址；若你用自己的服务器，请按下面「自己构建」重新打包。
@@ -224,7 +238,10 @@ npm run build                                    # 产物：android/app/build/ou
 
 - **首次登录**：管理员 `admin / 123456`，登录后**强制修改密码**。
 - **注册**：登录页「去注册」→ 邮箱注册（需验证码，需先在后台配置 SMTP）或账户名注册。
-- **新增路线**：工作台右上角「新增路线」→ 填名称 / 年份 / 日期 / 类型 / 天数 / 人数 / **币种** / **预算** / 目的地 / 景点路线 / 住宿 / 9 类花费。
+- **新增路线**：工作台右上角「新增路线」→ 填名称 / 年份 / 日期 / 类型 / 天数 / 人数 / **币种** / **预算** / 目的地 / 景点路线 / 住宿 → 保存。花费不再手工填，保存后会自动进入该路线的「流水」页开始记账。
+- **记一笔（逐笔流水）**：路线卡片上的「＋ 记一笔」，或进入「查看 → 流水」→ 填金额、选类目、选「谁付的钱」与「谁参与分摊」→ 保存。表单会实时显示「N 人平分，每人 ¥X」。点击列表里任意一笔即可编辑或删除。
+- **同行人**：详情「流水」页右上角「同行人」→ 逗号或空格分隔可一次加多人；可改名、点「设为我」标记记账人本人、移除（已被流水引用时会二次确认）。
+- **AA 结算**：详情「结算」页 → 查看每人实付 / 应负担 / 差额与「最少转账方案」；差额为正表示他人应还给你。
 - **多币种**：路线币种选非本位币（如 USD），首页统计自动按本位币折算；管理员在「管理后台 → 站点设置」切换本位币。
 - **预算超支**：路线卡片上进度条变红即超支；首页统计卡可看总预算与结余。
 - **导出 / 导入**：工作台右上角「导出」下载 CSV；「导入」选择之前 JSON 导出的文件即可还原（每人仅操作自己的数据）。
@@ -232,12 +249,14 @@ npm run build                                    # 产物：android/app/build/ou
 - **年度复盘**：滚动到工作台下方，按年查看占比与趋势。
 - **管理后台**：管理员右上角「管理后台」→ 用户管理（封禁 / 提权）、邮件配置、站点设置、**全站 CSV 导出**、**数据库备份下载**、审计日志。
 - **示例数据**：系统示例全员可见、普通用户只读；可在个人视图勾选「隐藏系统示例」。
+- **AI 规划行程**（需管理员先开启）：路线编辑页「景点路线」旁点「AI 规划」→ 自动生成按天行程，并把**注意事项与美食推荐**写入备注；不满意可点「调整」用大白话多轮修改，满意后「应用此版本」→ 保存。
 
 ---
 
 ## 🔒 数据存储与隐私
 
-- 所有路线与花费数据仅保存在你自己的服务器挂载卷 `data/app.db`（SQLite），不在任何第三方云。
+- 所有路线、流水与同行人数据仅保存在你自己的服务器挂载卷 `data/app.db`（SQLite），不在任何第三方云。
+- AI 功能为**可选**：只有管理员配置接口并授权账号后才会启用；调用时仅把「目的地 / 日期 / 天数 / 当前行程」发给所配置的模型服务，**不发送任何费用与同行人数据**。
 - 每位用户数据互相隔离（`owner_id`）；非本人且非示例的路线返回 404，不泄露存在性。
 - 密码 `scrypt` 加盐哈希存储；会话 `HttpOnly + SameSite=Lax` Cookie；管理员可即时封禁（删除全部会话）。
 
@@ -248,11 +267,13 @@ npm run build                                    # 产物：android/app/build/ou
 ```bash
 cd travel-expense
 npm install --prefix server              # 安装后端依赖（better-sqlite3 / nodemailer）
-node tests/run-all.js                    # 在仓库根目录执行：一条命令跑全部测试（主回归 + 深测 + 5 组功能冒烟）
+node tests/run-all.js                    # 在仓库根目录执行：一条命令跑全部测试（主回归 + 深测 + 7 组功能冒烟）
 ```
 
 - `tests/regression.test.js` / `regression.deep.test.js`：规格书全量回归（auth / routes / admin / 隔离 / 封禁 / 限流 / 邮件码）
-- `tests/smoke-*.test.js`：功能冒烟（多币种预算 / CSV 导出导入 / 只读分享 / 数据库备份），各自起隔离实例
+- `tests/smoke-budget|export|share|share-export|backup.test.js`：功能冒烟（多币种预算 / CSV 导出导入 / 只读分享 / 分享导出图片 / 数据库备份）
+- `tests/smoke-ledger.test.js`：**逐笔流水 + AA 分账**（流水增删改 / 聚合一致性 / 结算不变量 / 期初迁移 / 权限），各自起隔离实例
+- `tests/smoke-ai.test.js`：**AI 规划与调整**（权限门禁 / 结构化输出解析 / 参数校验 / 兼容回退），用本地 OpenAI 兼容 mock 承接模型请求，无需真实密钥
 - CI（GitHub Actions，`.github/workflows/ci.yml`）：Node 18/20/22 三版本跑全部测试
 
 [![CI](https://github.com/hanyuestar/travel-expense/actions/workflows/ci.yml/badge.svg)](https://github.com/hanyuestar/travel-expense/actions/workflows/ci.yml)
@@ -266,8 +287,8 @@ node tests/run-all.js                    # 在仓库根目录执行：一条命�
 1. ghcr 发布无需配置（自动注入 `GITHUB_TOKEN`）；Docker Hub 需配置 Secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（未配置则自动跳过 Docker Hub，不影响 ghcr）。
 2. 打版本 tag 并推送即触发构建（linux/amd64 + arm64 双架构）：
    ```bash
-   git tag -a v1.0.9 -m "v1.0.9 single-image"
-   git push origin v1.0.9     # 只推当前版本 tag
+   git tag -a v1.1.0 -m "v1.1.0 逐笔流水 + AA 分账"
+   git push origin v1.1.0     # 只推当前版本 tag
    # ⚠️ 切勿用 git push --tags：本地历史 tag 会被一并推送并各自触发构建，
    #    多个构建并发会争抢 latest，导致 latest 指向旧版本（v1.0.2 曾踩此坑）
    ```
@@ -299,20 +320,21 @@ travel-expense/
 │   ├── auth.js                        # 注册/登录/会话/封禁/改密（CSPRNG 验证码）
 │   ├── routes_api.js                  # 路线 CRUD（owner 隔离）+ 统计 + 导出导入 + 分享令牌
 │   ├── admin_api.js                   # 管理后台接口（含全站导出 / 数据库备份）
-│   ├── ai_service.js                  # AI 行程规划服务（OpenAI 兼容接口；测连/生成/调整行程）
+│   ├── ai_service.js                  # AI 行程规划服务（OpenAI 兼容；测连 / 生成 / 调整；解析行程+注意事项+美食推荐）
 │   ├── mailer.js                      # nodemailer SMTP 发码/测试邮件
 │   ├── fx.js                          # 多币种换算（静态汇率兜底 + 可选实时源）
 │   ├── csv.js                         # 轻量 CSV 序列化（零依赖）
 │   └── package.json
 ├── public/                            # 前端（后端内置托管，ES Modules 无构建）
-│   ├── index.html                     # 应用外壳（hash 路由）
+│   ├── index.html                     # 应用外壳（hash 路由）+ 各弹层容器
 │   ├── styles.css
 │   └── assets/
 │       ├── main.js                    # 路由守卫 + 启动
 │       ├── api.js                     # fetch 封装 + 全局状态 + 汇率换算
 │       ├── auth.js                    # 登录/注册页
-│       ├── app.js                     # 工作台（列表/统计/表单/个人中心/分享）
-│       ├── admin.js                   # 管理后台 6 页
+│       ├── app.js                     # 工作台（列表/统计/表单/详情三页签/个人中心/分享/AI）
+│       ├── ledger.js                  # 逐笔流水 + AA 分账（记一笔 / 同行人 / 结算）
+│       ├── admin.js                   # 管理后台 7 页（含 AI 配置）
 │       ├── charts.js                  # 手写 SVG 环形图/柱状图（本位币）
 │       └── html2canvas.min.js         # 分享页导出图片（v1.0.8 起，vendored）
 ├── android-app/                       # 安卓客户端工程（Capacitor 原生壳，webDir→public/）
@@ -321,9 +343,16 @@ travel-expense/
 │   ├── scripts/patch-native.mjs       # 注入原生定制（第三方 Cookie 放行 + 按主机放行 SSL）
 │   ├── .te-server-url.example         # 服务器地址模板（复制为 .te-server-url 填入你的地址）
 │   └── README.md                      # 构建与「WebView 第三方 Cookie」必改项说明
-├── tests/                             # 回归 + 冒烟测试（run-all.js 一键全跑）
-├── demo/index.html                    # 纯前端演示（单用户，数据存浏览器）
-├── deliverables/                      # 版本发布说明 / 验证报告 / 冒烟脚本存档
+├── tests/                             # 回归 + 冒烟测试 9 个脚本（run-all.js 一键全跑）
+│   ├── regression.test.js             # 主回归（规格书全量）
+│   ├── regression.deep.test.js        # 深测（边界 / 隔离 / 限流）
+│   ├── smoke-budget|export|share|share-export|backup.test.js
+│   ├── smoke-ledger.test.js           # 逐笔流水 + AA 分账（v1.1.0）
+│   └── smoke-ai.test.js               # AI 规划 / 调整（v1.1.0，本地 mock）
+├── demo/index.html                    # 纯前端演示（单用户，数据存浏览器；含逐笔流水与 AA 演示）
+├── deliverables/                      # 版本发布说明 / 验证报告 / 设计文档存档
+│   ├── proto-ledger-aa/               # 逐笔流水 + AA 分账 交互原型（可直接双击打开）
+│   └── prd-ledger-aa-2026-09-18.md    # 对应 PRD（含数据模型 / 接口契约 / 冲突清单）
 ├── data/                              # 运行时卷：app.db + 种子 routes.json（gitignore）
 └── README.md
 ```

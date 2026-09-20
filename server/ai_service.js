@@ -127,24 +127,86 @@ async function testConnection(config) {
   return { ok: true, reply: content };
 }
 
-/* 行程规划：根据起止日期、目的地、天数生成按天景点路线
- * 返回纯文本，直接回填到景点路线框。 */
+/* ---------- AI 输出解析 ----------
+ * 约定模型按三节输出：行程 / 注意事项 / 美食推荐。
+ * 解析后：scenic → 景点路线，tips + food → 备注（notes）。
+ * 兼容性：模型若未按约定输出（无任何小节标题），则整段视为行程、notes 为空，
+ * 保证旧行为不回归。 */
+const AI_SECTIONS = [
+  { key: 'scenic', labels: ['行程', '行程安排', '每日行程', '路线安排', '路线'] },
+  { key: 'tips', labels: ['注意事项', '出行提示', '温馨提示', '旅行提示'] },
+  { key: 'food', labels: ['美食推荐', '当地美食', '美食'] }
+];
+const AI_LABELS = AI_SECTIONS.reduce((a, s) => a.concat(s.labels), []);
+
+/* 判断某一行是否为小节标题（容忍 markdown 前缀、方括号、尾部冒号） */
+function sectionKey(line) {
+  let t = String(line || '').trim();
+  t = t.replace(/^[#>*\-\s]+/, '').replace(/[#*\s]+$/, '');
+  t = t.replace(/^[【\[]/, '').replace(/[】\]]$/, '');
+  t = t.replace(/[:：]\s*$/, '').trim();
+  for (const sec of AI_SECTIONS) if (sec.labels.includes(t)) return sec.key;
+  return null;
+}
+
+function parseAiItinerary(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return { scenic: '', notes: '' };
+
+  /* 把行内出现的小节标记规范成独占一行，兼容「一行到底」的输出 */
+  const inlineRe = new RegExp('[【\\[]\\s*(' + AI_LABELS.join('|') + ')\\s*[】\\]]', 'g');
+  const norm = raw.replace(inlineRe, '\n【$1】\n');
+
+  const buckets = { scenic: [], tips: [], food: [] };
+  const other = [];
+  let cur = null, matched = false;
+  for (const line of norm.split(/\r?\n/)) {
+    const k = sectionKey(line);
+    if (k) { cur = k; matched = true; continue; }
+    (cur ? buckets[cur] : other).push(line);
+  }
+
+  /* 未按约定输出 → 整段当作行程（保持旧行为） */
+  if (!matched) return { scenic: raw, notes: '' };
+
+  const join = (arr) => arr.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  let scenic = join(buckets.scenic);
+  /* 模型只给了注意事项/美食、漏了行程标题时，把标题前的内容并入行程 */
+  if (!scenic) scenic = join(other);
+
+  const notesParts = [];
+  const tips = join(buckets.tips);
+  const food = join(buckets.food);
+  if (tips) notesParts.push('【注意事项】\n' + tips);
+  if (food) notesParts.push('【美食推荐】\n' + food);
+
+  return { scenic, notes: notesParts.join('\n\n') };
+}
+
+/* 行程规划：根据起止日期、目的地、天数生成按天景点路线，
+ * 同时产出「注意事项」与「美食推荐」（由调用方回填到备注）。
+ * 返回 { scenic, notes }。 */
 async function planItinerary(config, { startDate, endDate, dest, days }) {
   if (!startDate || !endDate) throw new Error('缺少出行起止日期');
   if (!dest) throw new Error('缺少主要目的地');
   const d = parseInt(days, 10) || 0;
   if (d <= 0) throw new Error('天数无效');
 
-  const system = '你是一位资深旅行规划师，擅长根据目的地和出行天数生成合理、紧凑且可执行的每日行程。';
-  const user = `请为我规划一次旅行行程：
+  const system = '你是一位资深旅行规划师，擅长根据目的地和出行天数生成合理、紧凑且可执行的每日行程，并熟悉当地的实用注意事项与特色美食。';
+  const user = `请为我规划一次旅行：
 - 主要目的地：${dest}
 - 出行日期：${startDate} 至 ${endDate}（共 ${d} 天）
-- 输出要求：
-  1. 按天输出，每天以 "Day1"、"Day2"……开头；
-  2. 每天包含上午、下午、晚上的主要景点/活动安排，用简短分号分隔；
-  3. 每天的住宿城市写在当天末尾，用括号标注；
-  4. 只输出行程正文，不要任何开场白、总结或额外说明；
-  5. 路线安排要考虑地理顺序，避免来回折返。`;
+
+请严格按照以下三个小节输出，小节标题必须独占一行、使用【】包裹，不要输出任何开场白、总结或额外说明：
+
+【行程】
+按天输出，每天以 "Day1"、"Day2"……开头；每天包含上午、下午、晚上的主要景点/活动安排，用简短分号分隔；每天的住宿城市写在当天末尾，用括号标注；路线安排要考虑地理顺序，避免来回折返。
+
+【注意事项】
+列出 4-6 条当地实用注意事项（如天气与穿着、高原反应、门票预约、防晒、交通与安全、风俗禁忌等），每条一行，以 "- " 开头，尽量具体可执行。
+
+【美食推荐】
+列出 4-6 条当地特色美食或值得一试的餐馆类型，每条一行，以 "- " 开头，可注明大致价位或推荐理由。`;
 
   const content = await chatCompletion(
     config,
@@ -154,16 +216,15 @@ async function planItinerary(config, { startDate, endDate, dest, days }) {
     ],
     { temperature: 0.7, max_tokens: 4096, timeoutMs: 120000 }
   );
-  return content;
+  return parseAiItinerary(content);
 }
 
 /* 行程对话式调整：基于当前已有行程，根据用户指令修改后返回完整行程
  * 支持多轮对话历史，用户可连续调整。
- * currentScenic：当前景点路线文本
- * message：用户本轮调整指令
- * history：历史对话数组 [{role:'user'|'assistant', content}]
- * 返回调整后的完整行程文本，可直接回填。 */
-async function adjustItinerary(config, { currentScenic, message, dest, startDate, endDate, days, history }) {
+ * currentScenic：当前景点路线文本；currentNotes：当前备注（含上次生成的注意事项/美食推荐）
+ * message：用户本轮调整指令；history：历史对话数组 [{role, content}]
+ * 返回 { scenic, notes }；notes 仅在模型本次输出了相关小节时非空。 */
+async function adjustItinerary(config, { currentScenic, currentNotes, message, dest, startDate, endDate, days, history }) {
   if (!currentScenic || !String(currentScenic).trim()) throw new Error('缺少当前行程内容，请先生成或填写行程');
   if (!message || !String(message).trim()) throw new Error('缺少调整指令');
   if (!dest) throw new Error('缺少主要目的地');
@@ -172,23 +233,29 @@ async function adjustItinerary(config, { currentScenic, message, dest, startDate
 
   const system = '你是一位资深旅行规划师，擅长根据用户的具体要求对已有行程进行精准调整。调整时只修改用户要求的部分，保持其余内容不变，输出完整的调整后行程。';
 
+  const notesBlock = currentNotes && String(currentNotes).trim()
+    ? `\n当前已有的注意事项/美食推荐：\n${currentNotes}\n`
+    : '';
+
   const user = `当前已有行程：
 ${currentScenic}
-
+${notesBlock}
 旅行基本信息：
 - 主要目的地：${dest}
 - 出行日期：${startDate} 至 ${endDate}（共 ${d} 天）
 
 用户的调整要求：${message}
 
-请根据用户的要求调整行程，输出调整后的完整行程。
-输出要求：
-1. 按天输出，每天以 "Day1"、"Day2"……开头；
-2. 每天包含上午、下午、晚上的主要景点/活动安排，用简短分号分隔；
-3. 每天的住宿城市写在当天末尾，用括号标注；
-4. 只输出行程正文，不要任何开场白、总结或额外说明；
-5. 保持原有的天数和整体结构，只修改用户要求调整的部分；
-6. 路线安排要考虑地理顺序，避免来回折返。`;
+请根据用户的要求调整，并严格按照下面的格式输出，小节标题必须独占一行、使用【】包裹，不要输出任何开场白、总结或额外说明：
+
+【行程】
+输出调整后的完整行程：按天输出，每天以 "Day1"、"Day2"……开头；每天包含上午、下午、晚上的主要景点/活动安排，用简短分号分隔；每天的住宿城市写在当天末尾，用括号标注；保持原有的天数和整体结构，只修改用户要求调整的部分；路线安排要考虑地理顺序，避免来回折返。
+
+【注意事项】
+${currentNotes ? '若本次调整涉及注意事项则输出更新后的完整列表（每条一行，以 "- " 开头）；若不涉及，本节留空。' : '若本次调整涉及注意事项或其他实用提示，输出 4-6 条（每条一行，以 "- " 开头）；若不涉及，本节留空。'}
+
+【美食推荐】
+${currentNotes ? '若本次调整涉及美食推荐则输出更新后的完整列表（每条一行，以 "- " 开头）；若不涉及，本节留空。' : '若本次调整涉及美食推荐，输出 4-6 条（每条一行，以 "- " 开头）；若不涉及，本节留空。'}`;
 
   /* 构造 messages：system + 历史对话 + 当前 user 请求 */
   const messages = [{ role: 'system', content: system }];
@@ -206,7 +273,7 @@ ${currentScenic}
     messages,
     { temperature: 0.7, max_tokens: 4096, timeoutMs: 120000 }
   );
-  return content;
+  return parseAiItinerary(content);
 }
 
-module.exports = { testConnection, planItinerary, adjustItinerary, normalizeBaseUrl };
+module.exports = { testConnection, planItinerary, adjustItinerary, normalizeBaseUrl, parseAiItinerary };

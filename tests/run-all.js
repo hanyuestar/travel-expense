@@ -1,7 +1,7 @@
 /* 测试编排：一条命令跑全部测试（本地与 CI 通用）
  * 1. 起后端（隔离 DATA_DIR + 种子数据），注入注册/登录验证码
  * 2. 顺序执行主回归 + 深测（共享同一服务，数据前后衔接）
- * 3. 停服务，执行 5 个自托管冒烟（预算/导出导入/分享/分享导出图片/备份）
+ * 3. 停服务，执行 7 个自托管冒烟（预算/导出导入/分享/分享导出图片/备份/逐笔流水/AA/AI）
  * 运行：node tests/run-all.js
  * 退出码：0=全绿 1=有失败 2=异常
  */
@@ -81,6 +81,8 @@ async function main() {
   runStep('冒烟 smoke-share', () => runNode(path.join(__dirname, 'smoke-share.test.js'), {}, ROOT));
   runStep('冒烟 smoke-share-export', () => runNode(path.join(__dirname, 'smoke-share-export.test.js'), {}, ROOT));
   runStep('冒烟 smoke-backup', () => runNode(path.join(__dirname, 'smoke-backup.test.js'), {}, ROOT));
+  runStep('冒烟 smoke-ledger（逐笔流水 + AA 分账）', () => runNode(path.join(__dirname, 'smoke-ledger.test.js'), {}, ROOT));
+  runStep('冒烟 smoke-ai（AI 规划 / 调整）', () => runNode(path.join(__dirname, 'smoke-ai.test.js'), {}, ROOT));
 
   console.log('\n══════════════════════════════════');
   let fail = 0;

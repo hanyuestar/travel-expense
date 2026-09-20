@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: '镜像标签（默认 v1.0.9；免动 git tag 时用于重建同名镜像）'
+        description: '镜像标签（默认 v1.1.0；免动 git tag 时用于重建同名镜像）'
         required: false
-        default: 'v1.0.9'
+        default: 'v1.1.0'
 
 jobs:
   push:

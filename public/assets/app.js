@@ -1,10 +1,11 @@
 /* app.js — 工作台（路线列表 + 年度统计 + 路线表单 + 个人中心） */
 import { store, toast, api, navigate, esc, fmt, fmtMoney, CATS, parseStart, fmtTime } from './api.js';
 import { COLORS, totalOf, donut, trendBar } from './charts.js';
+import * as ledger from './ledger.js';
 
 let routes = [];
 let searchTimer = null;
-let state = { filterYear: 'all', search: '', curId: null, detailId: null, page: 1, total: 0, pageSize: 50, years: [] };
+let state = { filterYear: 'all', search: '', curId: null, detailId: null, detailTab: 'overview', page: 1, total: 0, pageSize: 50, years: [] };
 
 /* 全量年份（由 GET /api/routes/years 下发），工作台年份胶囊据此渲染。
  * 注意：必须用 .catch 兜底而非 try/catch —— 接口异常是 Promise 拒绝，
@@ -53,6 +54,17 @@ async function reloadAfterMutation() {
   renderRoutes();
   renderPager();
   renderStats();
+  /* 详情弹层若开着，同步刷新当前页签：
+   * 流水变化会改写 9 类聚合值，概览页的金额/占比必须跟着更新 */
+  if (document.getElementById('detailMask') &&
+      document.getElementById('detailMask').classList.contains('open') &&
+      state.detailId) {
+    const still = routes.find(x => x.id === state.detailId);
+    if (still) {
+      document.getElementById('d_name').textContent = still.name;
+      if (state.detailTab === 'overview') renderDetailTab();
+    }
+  }
 }
 
 /* 排序用起始时间：优先结构化 start_date，回退自由文本解析 */
@@ -179,11 +191,13 @@ function renderRoutes() {
     const t = totalOf(r);
     const per = perOf(r);
     const seed = r.is_seed ? '<span class="badge b-seed">示例</span>' : '';
+    const nExp = parseInt(r.expense_count, 10) || 0;
     return `<div class="card">
       <div class="card-top"><div><div class="card-name">${esc(r.name)}</div>
         <div class="badges"><span class="badge b-year">${esc(r.year || '')}</span>
         <span class="badge b-type">${esc(r.type || '')}</span>
-        ${r.days ? `<span class="badge b-days">${r.days}天</span>` : ''}${seed}</div></div></div>
+        ${r.days ? `<span class="badge b-days">${r.days}天</span>` : ''}
+        ${nExp ? `<span class="pill pill-ok">流水 ${nExp} 笔</span>` : ''}${seed}</div></div></div>
       <div class="card-meta">📅 ${esc(r.daterange || '')}${r.dest ? ' · ' + esc(r.dest) : ''}</div>
       <div class="card-total"><span class="amt">${fmtMoney(t, r.currency)}</span>${per != null ? `<span class="per">人均 ${fmtMoney(per, r.currency)}</span>` : ''}</div>
       ${miniBar(r)}
@@ -191,6 +205,7 @@ function renderRoutes() {
       <div class="card-actions">
         <button class="btn btn-sm" data-act="detail" data-id="${r.id}">查看</button>
         ${r.is_seed && store.user && store.user.role !== 'admin' ? '' : `<button class="btn btn-sm" data-act="edit" data-id="${r.id}">编辑</button>`}
+        ${r.is_seed && store.user && store.user.role !== 'admin' ? '' : `<button class="btn btn-sm btn-line" data-act="add" data-id="${r.id}">＋ 记一笔</button>`}
       </div>
     </div>`;
   }).join('');
@@ -238,8 +253,18 @@ function onGridClick(e) {
   const b = e.target.closest('[data-act]');
   if (!b) return;
   const id = b.dataset.id;
-  if (b.dataset.act === 'detail') openDetail(id);
-  else if (b.dataset.act === 'edit') openForm(id);
+  const act = b.dataset.act;
+  if (act === 'detail') openDetail(id);
+  else if (act === 'edit') openForm(id);
+  /* 卡片上的「记一笔」：直接进入该路线详情的流水页签并打开记账表单 */
+  else if (act === 'add') {
+    const r = routes.find(x => x.id === id);
+    if (!r) return;
+    state.detailId = id;
+    state.detailTab = 'ledger';
+    openMask('detailMask');
+    ledger.openExpenseSheet(r, null, reloadAfterMutation);
+  }
 }
 
 /* ---------- 导出 / 导入 ---------- */
@@ -304,9 +329,15 @@ export async function renderStats() {
   const remaining = summary.remaining;
 
   const cards = document.getElementById('statCards');
-  if (cards) cards.innerHTML = card('总花费(' + home + ')', homeMoney(total))
-    + card('出行次数', count + ' 次') + card('次均花费', homeMoney(avg)) + card('总天数', days + ' 天')
-    + card('总预算', homeMoney(budgetTotal)) + card('结余', homeMoney(remaining), remaining < 0 ? 'var(--danger)' : '');
+  if (cards) {
+    /* 未设置总预算时，「总预算 / 结余」无意义：显示 — 而不是把全部花费算成负结余 */
+    const hasBudget = (parseFloat(budgetTotal) || 0) > 0;
+    cards.innerHTML = card('总花费(' + home + ')', homeMoney(total))
+      + card('出行次数', count + ' 次') + card('次均花费', homeMoney(avg)) + card('总天数', days + ' 天')
+      + (hasBudget
+        ? card('总预算', homeMoney(budgetTotal)) + card('结余', homeMoney(remaining), remaining < 0 ? 'var(--danger)' : '')
+        : card('总预算', '未设置') + card('结余', '—'));
+  }
 
   const catTot = summary.totalByCat || {};
   const data = CATS.filter(c => (catTot[c] || 0) > 0).map(c => ({ label: c, value: catTot[c], color: COLORS[c] }));
@@ -394,14 +425,6 @@ function parseDatesFromRange(dr, year) {
 }
 
 /* ---------- 表单 ---------- */
-function buildExpInputs() {
-  const box = document.getElementById('expInputs');
-  if (!box) return;
-  box.innerHTML = CATS.map(c =>
-    `<div class="exp-cell"><div class="el"><span class="sw" style="background:${COLORS[c]}"></span>${c}</div>
-     <input type="number" min="0" step="0.01" id="exp_${c}" placeholder="0"></div>`).join('');
-}
-
 /* 日期变化时自动计算天数并更新 daterange 隐藏字段 */
 function onDateChange() {
   const start = document.getElementById('f_start_date').value;
@@ -454,7 +477,27 @@ export function openForm(id) {
   document.getElementById('f_scenic').value = r ? (r.scenic || '') : '';
   document.getElementById('f_hotel').value = r ? (r.hotel || '') : '';
   document.getElementById('f_notes').value = r ? (r.notes || '') : '';
-  CATS.forEach(c => { document.getElementById('exp_' + c).value = r && r.exp && r.exp[c] != null ? r.exp[c] : ''; });
+
+  /* 花费明细统一由流水派生：编辑态提供「去记流水」直达；新增态提示保存后再记 */
+  const hintText = document.getElementById('expLedgerHintText');
+  const goBtn = document.getElementById('gotoLedgerBtn');
+  if (hintText) {
+    hintText.textContent = r
+      ? `9 类花费由逐笔流水自动汇总（当前 ${parseInt(r.expense_count, 10) || 0} 笔），本表单不再手工填写。`
+      : '9 类花费改由「逐笔流水」自动汇总：保存路线后打开「查看 → 流水」记录每一笔消费，总额、人均与结算都会自动算好。';
+  }
+  if (goBtn) {
+    goBtn.style.display = r ? '' : 'none';
+    goBtn.onclick = () => {
+      if (!r) return;
+      closeMask('formMask');
+      state.detailId = r.id;
+      state.detailTab = 'ledger';
+      openMask('detailMask');
+      paintDetailTabs();
+      renderDetailTab();
+    };
+  }
 
   /* AI 按钮：仅当当前用户被启用 AI 功能时显示
    * 启用方式：管理后台 → AI 配置 → 勾选对应用户 → 保存启用用户 */
@@ -469,6 +512,30 @@ export function openForm(id) {
 }
 
 /* AI 行程规划：校验必填项 → 调用接口 → 回填景点路线 */
+/* AI 生成的「注意事项 / 美食推荐」写入备注。
+ * 备注已有内容时追加而非覆盖（用户自己的备注不能丢），并做幂等判断避免重复追加。
+ * 返回是否真的写入了内容。 */
+function fillAiNotes(notes) {
+  const text = String(notes || '').trim();
+  if (!text) return false;
+  const box = document.getElementById('f_notes');
+  if (!box) return false;
+  const cur = box.value.trim();
+  if (!cur) { box.value = text; return true; }
+  if (cur.includes(text)) return true;              /* 已写入过，跳过 */
+  box.value = cur + '\n\n—— AI 补充 ——\n' + text;
+  return true;
+}
+
+/* 回填 AI 结果到表单：行程 → 景点路线；注意事项/美食推荐 → 备注 */
+function applyAiResult(res) {
+  if (!res) return false;
+  if (res.scenic) document.getElementById('f_scenic').value = res.scenic;
+  fillAiNotes(res.notes);
+  syncAiChatBtn();
+  return !!res.scenic;
+}
+
 async function aiPlanRoute() {
   const startDate = document.getElementById('f_start_date').value;
   const endDate = document.getElementById('f_end_date').value;
@@ -493,9 +560,13 @@ async function aiPlanRoute() {
     });
     if (res && res.scenic) {
       document.getElementById('f_scenic').value = res.scenic;
+      /* 注意事项 + 美食推荐 → 备注（已有内容时追加，不覆盖用户自己的备注） */
+      const filled = fillAiNotes(res.notes);
       /* 回填后表单已有行程内容，立即同步「调整」按钮可见，无需先保存再重开表单 */
       syncAiChatBtn();
-      toast('AI 行程规划完成，已回填到景点路线');
+      toast(filled
+        ? 'AI 规划完成：行程已回填，注意事项与美食推荐已写入备注'
+        : 'AI 行程规划完成，已回填到景点路线');
     } else {
       toast('AI 返回内容为空');
     }
@@ -650,6 +721,8 @@ async function sendAiChatMessage() {
   try {
     const res = await api.post('/routes/ai-chat', {
       current_scenic: currentScenic,
+      /* 当前备注（含上次生成的注意事项/美食推荐）→ 让模型做增量更新而不是从零重写 */
+      current_notes: (document.getElementById('f_notes') || {}).value || '',
       message,
       dest,
       start_date: startDate,
@@ -666,6 +739,8 @@ async function sendAiChatMessage() {
       session.history.push({ role: 'user', content: message });
       session.history.push({ role: 'assistant', content: res.scenic });
       session.lastResult = res.scenic;
+      /* 备注若本次被更新，同样在「应用此版本」时一并回填 */
+      session.lastNotes = res.notes || '';
 
       /* 渲染 AI 回复 */
       renderAiChatMessage('assistant', res.scenic);
@@ -690,10 +765,12 @@ function applyAiChatResult() {
   const session = aiChatState.session;
   if (!session || !session.lastResult) { toast('没有可应用的行程'); return; }
   document.getElementById('f_scenic').value = session.lastResult;
+  /* 若本次调整同时更新了注意事项/美食推荐，一并写入备注 */
+  const notesFilled = fillAiNotes(session.lastNotes);
   /* 表单内容已成为新的基准行程：同步会话基准，避免下次打开被视为「基准变化」而丢弃历史 */
   session.baseScenic = session.lastResult;
   closeMask('aiChatMask');
-  toast('已应用调整后的行程');
+  toast(notesFilled ? '已应用调整后的行程，备注同步更新' : '已应用调整后的行程');
   /* 应用后表单已有行程内容，同步「调整」按钮为可见 */
   syncAiChatBtn();
 }
@@ -703,11 +780,10 @@ function applyAiChatResult() {
 async function saveForm() {
   const name = document.getElementById('f_name').value.trim();
   if (!name) { toast('请填写路线名称'); return; }
-  const exp = {};
-  CATS.forEach(c => (exp[c] = parseFloat(document.getElementById('exp_' + c).value) || 0));
   const startDate = document.getElementById('f_start_date').value;
   const endDate = document.getElementById('f_end_date').value;
   const days = calcDays(startDate, endDate);
+  /* 注意：不再提交 exp —— 9 类花费统一由服务端按逐笔流水汇总（提交反而会覆盖聚合值） */
   const obj = {
     name, year: document.getElementById('f_year').value.trim(),
     daterange: document.getElementById('f_daterange').value || buildDateRangeText(startDate, endDate),
@@ -722,12 +798,25 @@ async function saveForm() {
     dest: document.getElementById('f_dest').value.trim(),
     scenic: document.getElementById('f_scenic').value,
     hotel: document.getElementById('f_hotel').value,
-    notes: document.getElementById('f_notes').value,
-    exp
+    notes: document.getElementById('f_notes').value
   };
   try {
     if (state.curId) { await api.put('/routes/' + encodeURIComponent(state.curId), obj); toast('已保存'); }
-    else { await api.post('/routes', obj); toast('已新增路线'); }
+    else {
+      const rec = await api.post('/routes', obj);
+      toast('已新增路线，接下来可以逐笔记录花费');
+      closeMask('formMask');
+      await reloadAfterMutation();
+      /* 新增后直接引导到流水页签，省掉「再点一次查看」 */
+      if (rec && rec.id) {
+        state.detailId = rec.id;
+        state.detailTab = 'ledger';
+        openMask('detailMask');
+        paintDetailTabs();
+        renderDetailTab();
+      }
+      return;
+    }
     closeMask('formMask');
     await reloadAfterMutation();
   } catch (e) { toast(e.message); }
@@ -743,13 +832,75 @@ async function deleteRoute(id) {
   } catch (e) { toast(e.message); }
 }
 
-/* ---------- 详情 ---------- */
+/* ---------- 详情（三页签：概览 / 流水 / 结算） ---------- */
 export function openDetail(id) {
   const r = routes.find(x => x.id === id);
   if (!r) { toast('路线不存在'); return; }
   state.detailId = id;
+  if (!state.detailTab) state.detailTab = 'overview';
   openMask('detailMask');
   document.getElementById('d_name').textContent = r.name;
+  paintDetailTabs();
+  renderDetailTab();
+}
+
+function paintDetailTabs() {
+  const box = document.getElementById('d_tabs');
+  if (!box) return;
+  const tabs = [['overview', '概览'], ['ledger', '流水'], ['settle', '结算']];
+  box.innerHTML = tabs.map(([k, label]) =>
+    `<div class="tab${state.detailTab === k ? ' active' : ''}" data-tab="${k}">${label}</div>`).join('');
+  box.querySelectorAll('[data-tab]').forEach(t => {
+    t.onclick = () => {
+      if (state.detailTab === t.dataset.tab) return;
+      state.detailTab = t.dataset.tab;
+      paintDetailTabs();
+      renderDetailTab();
+    };
+  });
+}
+
+function renderDetailTab() {
+  const r = routes.find(x => x.id === state.detailId);
+  const body = document.getElementById('d_body');
+  const acts = document.getElementById('d_actions');
+  if (!r || !body) return;
+
+  /* 底部操作区随页签切换 */
+  const seedOnly = r.is_seed && store.user && store.user.role !== 'admin';
+  if (state.detailTab === 'overview') {
+    acts.innerHTML = `<button class="btn" id="d_edit">编辑</button><button class="btn btn-primary" data-close="detailMask">关闭</button>`;
+    const eb = document.getElementById('d_edit');
+    if (eb) {
+      eb.style.display = seedOnly ? 'none' : '';
+      eb.onclick = () => openForm(r.id);
+    }
+    acts.querySelectorAll('[data-close]').forEach(b => { b.onclick = () => closeMask(b.dataset.close); });
+    renderOverview(r, body, seedOnly);
+    return;
+  }
+
+  acts.innerHTML = `<button class="btn" id="d_ledgerTv">同行人</button>
+    ${seedOnly ? '' : '<button class="btn btn-primary" id="d_ledgerAdd">＋ 记一笔</button>'}`;
+  const tv = document.getElementById('d_ledgerTv');
+  if (tv) tv.onclick = () => ledger.openTravelersSheet(r, reloadAfterMutation);
+  const ad = document.getElementById('d_ledgerAdd');
+  if (ad) ad.onclick = () => ledger.openExpenseSheet(r, null, reloadAfterMutation);
+
+  if (state.detailTab === 'ledger') {
+    ledger.renderLedgerTab(body, r, reloadAfterMutation);
+  } else {
+    body.innerHTML = '<div class="empty">加载结算…</div>';
+    ledger.renderSettleTab(body, r, reloadAfterMutation).then(() => {
+      /* 结算页的「去记流水」：切回流水页签 */
+      body.querySelectorAll('.toolbar #stGoLedger').forEach(b => {
+        b.onclick = () => { state.detailTab = 'ledger'; paintDetailTabs(); renderDetailTab(); };
+      });
+    });
+  }
+}
+
+function renderOverview(r, body, seedOnly) {
   const t = totalOf(r);
   const per = perOf(r);
   let h = '';
@@ -766,16 +917,19 @@ export function openDetail(id) {
   h += '<div style="height:10px"></div><div class="detail-row"><span class="k">9 类花费明细</span><span class="v">合计 ' + fmtMoney(t, r.currency) + '</span></div>';
   CATS.forEach(c => { const v = parseFloat(r.exp[c]) || 0; h += detailExp(c, v, t, r.currency); });
   if (r.notes) h += '<div style="height:10px"></div><div class="detail-row"><span class="k">备注</span></div><div class="pre-wrap">' + esc(r.notes) + '</div>';
-  document.getElementById('d_body').innerHTML = h;
-  const seedOnly = r.is_seed && store.user && store.user.role !== 'admin';
-  document.getElementById('d_edit').style.display = seedOnly ? 'none' : '';
-  /* 分享入口：仅本人路线或管理员（种子对普通用户只读，不展示） */
+  h += `<div class="banner" style="margin-top:12px">以上 9 类金额由<b>逐笔流水</b>自动汇总（共 ${parseInt(r.expense_count, 10) || 0} 笔）。
+    <div style="margin-top:8px"><button class="btn btn-sm btn-line" id="d_gotoLedger">查看 / 记录流水</button></div></div>`;
+  body.innerHTML = h;
+  const g = document.getElementById('d_gotoLedger');
+  if (g) g.onclick = () => { state.detailTab = 'ledger'; paintDetailTabs(); renderDetailTab(); };
+
+  /* 分享入口：仅本人路线或管理员（示例对普通用户只读，不展示） */
   if (!seedOnly) {
     const sb = document.createElement('div');
     sb.className = 'detail-row';
     sb.style.marginTop = '10px';
     sb.innerHTML = '<span class="k">分享</span><span class="v"><button class="btn btn-sm" id="shareBtn">生成只读链接</button></span>';
-    document.getElementById('d_body').appendChild(sb);
+    body.appendChild(sb);
     sb.querySelector('#shareBtn').onclick = async () => {
       try {
         const res = await api.post('/routes/' + encodeURIComponent(r.id) + '/share');
@@ -843,10 +997,11 @@ export function closeMask(id) { document.getElementById(id).classList.remove('op
 export function bindFormEvents() {
   document.getElementById('formSave').onclick = saveForm;
   document.getElementById('formDelete').onclick = () => deleteRoute(state.curId);
-  document.getElementById('d_edit').onclick = () => { closeMask('detailMask'); openForm(state.detailId); };
+  /* 详情的三个页签与底部按钮由 renderDetailTab() 动态生成，编辑入口在开放时绑定 */
   document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => closeMask(b.dataset.close));
   document.querySelectorAll('.mask').forEach(m => m.onclick = e => { if (e.target === m) closeMask(m.id); });
-  buildExpInputs();
+  /* 流水 / 同行人弹层的静态事件（模块内部一次性绑定） */
+  ledger.initLedgerModule();
   /* 日期变化自动计算天数 */
   document.getElementById('f_start_date').addEventListener('change', onDateChange);
   document.getElementById('f_end_date').addEventListener('change', onDateChange);

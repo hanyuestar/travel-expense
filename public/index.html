@@ -91,8 +91,11 @@
     </div>
     <div class="field"><label>住宿位置</label><textarea id="f_hotel" placeholder="如家武林广场店、迪堡酒店…"></textarea></div>
     <div class="field">
-      <label>9 类花费（元）<span class="hint">只填知道的，留空计 0</span></label>
-      <div class="exp-grid" id="expInputs"></div>
+      <label>花费明细 <span class="hint">由逐笔流水自动汇总，无需手工填写</span></label>
+      <div class="banner" id="expLedgerHint" style="margin:0">
+        <span id="expLedgerHintText">9 类花费改由「逐笔流水」自动汇总：保存路线后打开「查看 → 流水」记录每一笔消费，总额、人均与结算都会自动算好。</span>
+        <div style="margin-top:8px"><button type="button" class="btn btn-sm btn-line" id="gotoLedgerBtn" style="display:none">去记流水</button></div>
+      </div>
     </div>
     <div class="field"><label>备注</label><textarea id="f_notes" placeholder="可选"></textarea></div>
     <div class="sheet-actions">
@@ -103,15 +106,13 @@
   </div>
 </div>
 
-<!-- 路线详情 -->
+<!-- 路线详情（概览 / 流水 / 结算 三页签） -->
 <div class="mask" id="detailMask">
-  <div class="sheet">
+  <div class="sheet" style="max-width:620px">
     <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span id="d_name"></span><button class="close-x" data-close="detailMask">×</button></h2>
+    <div class="tabs" id="d_tabs"></div>
     <div id="d_body"></div>
-    <div class="sheet-actions">
-      <button class="btn" id="d_edit">编辑</button>
-      <button class="btn btn-primary" data-close="detailMask">关闭</button>
-    </div>
+    <div class="sheet-actions" id="d_actions"></div>
   </div>
 </div>
 
@@ -142,6 +143,81 @@
     <div id="aiChatApplyBar" style="display:none;margin-top:10px;padding:10px;background:#e8f5e9;border-radius:6px;align-items:center;justify-content:space-between">
       <span style="font-size:13px;color:#2e7d32">✨ AI 已生成调整后的行程</span>
       <button class="btn btn-primary btn-sm" id="aiChatApply">应用此版本</button>
+    </div>
+  </div>
+</div>
+
+<!-- 记一笔（逐笔消费流水） -->
+<div class="mask" id="expMask">
+  <div class="sheet">
+    <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span id="e_title">记一笔</span><button class="close-x" data-close="expMask">×</button></h2>
+
+    <div class="field">
+      <label>金额 <span class="hint">按路线币种填写，无需换算</span></label>
+      <div class="amt-input">
+        <span class="cur" id="e_cur">¥</span>
+        <input id="e_amount" inputmode="decimal" placeholder="0.00" autocomplete="off">
+      </div>
+      <div class="quick-amt" id="e_quick"></div>
+    </div>
+
+    <div class="field">
+      <label>类目 <span class="hint">与 9 类花费一致</span></label>
+      <div class="chip-row" id="e_cats"></div>
+    </div>
+
+    <div class="form-row">
+      <div class="field"><label>消费日期</label><input type="date" id="e_date"></div>
+      <div class="field"><label>事项 <span class="hint">如：青海湖门票</span></label><input id="e_name" placeholder="选填"></div>
+    </div>
+
+    <div class="field">
+      <label>谁付的钱 <span class="hint">用于 AA 结算</span></label>
+      <div class="chip-row" id="e_payer"></div>
+    </div>
+
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>谁参与分摊</span>
+        <button type="button" class="btn btn-sm btn-line" id="e_all" style="padding:2px 8px;font-size:12px">全选</button>
+        <button type="button" class="btn btn-sm btn-line" id="e_none" style="padding:2px 8px;font-size:12px">清空</button>
+      </label>
+      <div class="chip-row" id="e_parts"></div>
+      <div class="split-hint" id="e_hint"></div>
+    </div>
+
+    <div class="field"><label>备注</label><textarea id="e_note" placeholder="选填"></textarea></div>
+
+    <div class="sheet-actions">
+      <button class="btn btn-danger btn-sm" id="e_del" style="display:none">删除</button>
+      <button class="btn" data-close="expMask">取消</button>
+      <button class="btn btn-primary" id="e_save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 同行人管理（AA 结算主体） -->
+<div class="mask" id="tvMask">
+  <div class="sheet" style="max-width:480px">
+    <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>同行人</span><button class="close-x" data-close="tvMask">×</button></h2>
+    <div class="kv"><span class="k">路线登记的同行人数</span><span class="v" id="t_people">—</span></div>
+    <div class="kv"><span class="k">已登记同行人</span><span class="v" id="t_count">—</span></div>
+    <div class="hint" style="margin:8px 0 14px;line-height:1.7">
+      人均按<b>已登记名单</b>计算；名单为空时按「同行人数」估算。两者不一致时会提示，但不会自动改写你填的人数。
+    </div>
+    <div class="field">
+      <label>添加同行人 <span class="hint">逗号 / 空格分隔可一次加多人</span></label>
+      <div class="code-row">
+        <input class="grow" id="t_new" placeholder="如：阿May、老陈">
+        <button class="btn btn-primary" id="t_add" style="height:42px">添加</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>名单 <span class="hint">点击「改」改名、「设为我」标记记账人</span></label>
+      <div id="t_list"></div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn btn-primary" data-close="tvMask">完成</button>
     </div>
   </div>
 </div>

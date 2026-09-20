@@ -171,6 +171,79 @@
     .stat-cards{grid-template-columns:1fr}
     .h-title{font-size:16px}
   }
+
+  /* ---------- 逐笔流水 + AA 分账（v1.1.0） ---------- */
+  .budget{margin-top:1px}
+  .budget-bar{height:7px;border-radius:6px;background:#eef3f1;overflow:hidden}
+  .budget-bar span{display:block;height:100%;border-radius:6px;transition:width .2s}
+  .budget-txt{font-size:11.5px;color:var(--muted);margin-top:5px}
+  .sheet .tabs{margin:2px 0 12px}
+  .tv{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:700;color:#fff;flex:0 0 auto;letter-spacing:.5px}
+  .tv-sm{width:22px;height:22px;font-size:11px}
+  .tv-row{display:flex;align-items:center;gap:7px;font-size:13.5px}
+  .tv-me{box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--primary-l)}
+  .chip.has-tick{padding-left:10px}
+  .chip .tick{font-weight:800;margin-right:2px}
+  .led-day{font-size:12px;font-weight:700;color:var(--muted);padding:10px 2px 6px;letter-spacing:.4px}
+  .led{display:flex;align-items:center;gap:10px;padding:10px 11px;border:1px solid var(--line);border-radius:12px;
+    background:#fff;margin-bottom:7px;cursor:pointer}
+  .led:hover{background:#fafefc}
+  .led .sw{width:9px;height:9px;border-radius:3px;flex:0 0 auto}
+  .led .t{flex:1;min-width:0}
+  .led .t .n{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .led .t .m{font-size:11.5px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .led .amt{font-size:15px;font-weight:700;color:var(--primary-d);white-space:nowrap}
+  .led-share{background:#f7fbfa;border:1px dashed var(--line);border-radius:9px;padding:3px 7px;font-size:11px}
+  .led-empty-actions{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+  .settle-net{font-weight:700;white-space:nowrap}
+  .net-plus{color:var(--primary-d)}
+  .net-minus{color:var(--danger)}
+  .tf{display:flex;align-items:center;gap:9px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;
+    background:#fff;margin-bottom:8px;font-size:13.5px}
+  .tf .arrow{color:var(--muted);font-weight:700}
+  .tf .amt{margin-left:auto;font-weight:800;color:var(--primary-d);font-size:15px;white-space:nowrap}
+  .caliber{font-size:11.5px;color:var(--muted);line-height:1.7;margin-top:9px}
+  .amt-input{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff}
+  .amt-input:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-l)}
+  .amt-input .cur{font-size:18px;font-weight:700;color:var(--muted)}
+  .amt-input input{border:none;padding:0;font-size:24px;font-weight:800;color:var(--text);background:transparent}
+  .amt-input input:focus{outline:none;box-shadow:none;border:none}
+  .quick-amt{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .split-hint{display:flex;align-items:center;gap:8px;background:var(--primary-l);color:var(--primary-d);
+    border-radius:10px;padding:9px 11px;font-size:13px;font-weight:600;margin-top:9px;line-height:1.6}
+  .split-hint.warn{background:#fdece8;color:var(--danger)}
+  .hint{font-size:11.5px;color:var(--muted);font-weight:400}
+  .tv-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);
+    border-radius:12px;background:#fff;margin-bottom:7px}
+  .tv-item .tv-name{flex:1;min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tv-item .btn{min-height:32px;padding:0 10px;font-size:12.5px;border-radius:9px}
+  .form-row{display:flex;gap:10px;flex-wrap:wrap}
+  .form-row .field{flex:1;min-width:150px}
+  /* 弹层内的页签：与主样式表一致（demo 的 .tab 是顶部导航样式，需在 .sheet 内覆盖） */
+  .sheet .tabs{display:flex;background:#f0f7f5;border-radius:12px;padding:4px;margin:2px 0 12px}
+  .sheet .tabs .tab{flex:1;text-align:center;padding:9px;border-radius:9px;font-size:14px;font-weight:600;
+    color:var(--muted);cursor:pointer;background:transparent;border:none;min-height:auto;display:block;transition:none}
+  .sheet .tabs .tab.active{background:#fff;color:var(--primary-d);box-shadow:0 1px 6px rgba(20,90,75,.12)}
+  /* 以下组件与主样式表保持同名同样式，避免两版视觉分叉 */
+  .kv{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px}
+  .kv:last-child{border-bottom:none}
+  .kv .k{color:var(--muted)}
+  .kv .v{font-weight:700;text-align:right}
+  .table-wrap{background:#fff;border:1px solid var(--line);border-radius:14px;overflow-x:auto}
+  table.tbl{width:100%;border-collapse:collapse;font-size:13.5px;min-width:640px}
+  .tbl th{background:#f7fbfa;text-align:left;padding:10px 12px;font-weight:700;color:var(--muted);
+    border-bottom:1px solid var(--line);white-space:nowrap}
+  .tbl td{padding:10px 12px;border-bottom:1px solid #f0f6f4;vertical-align:middle}
+  .tbl tr:last-child td{border-bottom:none}
+  .pill{display:inline-block;font-size:11px;padding:2px 9px;border-radius:10px;font-weight:600}
+  .pill-user{background:#e6f7f2;color:var(--primary-d)}
+  .pill-ok{background:#e6f7f2;color:var(--primary-d)}
+  .banner{margin:12px 0;background:linear-gradient(135deg,#fff8e6,#fff);border:1px solid #f3e2b0;
+    border-radius:14px;padding:11px 14px;color:#7a5c16;font-size:14px}
+  .code-row{display:flex;gap:8px}
+  .code-row .grow{flex:1}
+  .mono{font-family:Consolas,Menlo,monospace;font-size:12.5px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -264,8 +337,11 @@
     <div class="field"><label>景点路线</label><textarea id="f_scenic" placeholder="按天记录：Day1 西宁-祁连…；Day2 张掖…"></textarea></div>
     <div class="field"><label>住宿位置</label><textarea id="f_hotel" placeholder="如家武林广场店、迪堡酒店…"></textarea></div>
     <div class="field">
-      <label>9 类花费（元）<span class="hint">只填知道的，留空计 0</span></label>
-      <div class="exp-grid" id="expInputs"></div>
+      <label>花费明细 <span class="hint">由逐笔流水自动汇总，无需手工填写</span></label>
+      <div class="banner" id="expLedgerHint" style="margin:0">
+        <span id="expLedgerHintText">9 类花费改由「逐笔流水」自动汇总：保存路线后打开「查看 → 流水」记录每一笔消费，总额、人均与结算都会自动算好。</span>
+        <div style="margin-top:8px"><button type="button" class="btn btn-sm btn-line" id="gotoLedgerBtn" style="display:none">去记流水</button></div>
+      </div>
     </div>
     <div class="field"><label>备注</label><textarea id="f_notes" placeholder="可选"></textarea></div>
     <div class="sheet-actions">
@@ -280,11 +356,57 @@
 <div class="mask" id="detailMask">
   <div class="sheet">
     <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span id="d_name"></span><button class="close-x" data-close="detailMask">×</button></h2>
+    <div class="tabs" id="d_tabs"></div>
     <div id="d_body"></div>
-    <div class="sheet-actions">
-      <button class="btn" id="d_edit">编辑</button>
-      <button class="btn btn-primary" data-close="detailMask">关闭</button>
+    <div class="sheet-actions" id="d_actions"></div>
+  </div>
+</div>
+
+<!-- 记一笔 -->
+<div class="mask" id="expMask">
+  <div class="sheet">
+    <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span id="e_title">记一笔</span><button class="close-x" data-close="expMask">×</button></h2>
+    <div class="field">
+      <label>金额</label>
+      <div class="amt-input"><span class="cur" id="e_cur">¥</span><input id="e_amount" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+      <div class="quick-amt" id="e_quick"></div>
     </div>
+    <div class="field"><label>类目 <span class="hint">与 9 类花费一致</span></label><div class="chip-row" id="e_cats"></div></div>
+    <div class="form-row">
+      <div class="field"><label>消费日期</label><input type="date" id="e_date"></div>
+      <div class="field"><label>事项 <span class="hint">如：青海湖门票</span></label><input id="e_name" placeholder="选填"></div>
+    </div>
+    <div class="field"><label>谁付的钱 <span class="hint">用于 AA 结算</span></label><div class="chip-row" id="e_payer"></div></div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>谁参与分摊</span>
+        <button type="button" class="btn btn-sm btn-line" id="e_all" style="padding:2px 8px;font-size:12px">全选</button>
+        <button type="button" class="btn btn-sm btn-line" id="e_none" style="padding:2px 8px;font-size:12px">清空</button>
+      </label>
+      <div class="chip-row" id="e_parts"></div>
+      <div class="split-hint" id="e_hint"></div>
+    </div>
+    <div class="field"><label>备注</label><textarea id="e_note" placeholder="选填"></textarea></div>
+    <div class="sheet-actions">
+      <button class="btn btn-danger btn-sm" id="e_del" style="display:none">删除</button>
+      <button class="btn" data-close="expMask">取消</button>
+      <button class="btn btn-primary" id="e_save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 同行人 -->
+<div class="mask" id="tvMask">
+  <div class="sheet" style="max-width:480px">
+    <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>同行人</span><button class="close-x" data-close="tvMask">×</button></h2>
+    <div class="kv"><span class="k">路线登记的同行人数</span><span class="v" id="t_people">—</span></div>
+    <div class="kv"><span class="k">已登记同行人</span><span class="v" id="t_count">—</span></div>
+    <div class="hint" style="margin:8px 0 14px;line-height:1.7">人均按<b>已登记名单</b>计算；名单为空时按「同行人数」估算。两者不一致时会提示，但不会自动改写你填的人数。</div>
+    <div class="field"><label>添加同行人 <span class="hint">逗号 / 空格分隔可一次加多人</span></label>
+      <div class="code-row"><input class="grow" id="t_new" placeholder="如：小美、阿强"><button class="btn btn-primary" id="t_add" style="height:42px">添加</button></div>
+    </div>
+    <div class="field"><label>名单 <span class="hint">可改名、标记记账人、移除</span></label><div id="t_list"></div></div>
+    <div class="sheet-actions"><button class="btn btn-primary" data-close="tvMask">完成</button></div>
   </div>
 </div>
 
@@ -307,29 +429,98 @@ const SAMPLE=[
    exp:{"交通":0,"机票":3200,"高铁":0,"住宿":1500,"餐饮":1000,"门票":600,"团费":2000,"购物":0,"其他":400},notes:"示例数据，仅用于演示"},
   {id:"sample004",year:"2026",name:"示例·周末近郊轻旅行",daterange:"10/02 - 10/03",type:"自由行",days:2,people:3,dest:"近郊度假区",
    scenic:"Day1 自驾-露营-烧烤\nDay2 徒步-返程",hotel:"营地",
-   exp:{"交通":200,"机票":0,"高铁":0,"住宿":0,"餐饮":350,"门票":120,"团费":0,"购物":0,"其他":80},notes:"示例数据，仅用于演示"}
+   exp:{"交通":200,"机票":0,"高铁":0,"住宿":0,"餐饮":830,"门票":480,"团费":0,"购物":260,"其他":80},notes:"示例数据，仅用于演示",
+   /* 同行人 + 逐笔流水（演示 AA 分账：含全员分摊、单人自担、以及不参与分摊的历史期初） */
+   travelers:[{id:"s4t1",name:"我（示例）",is_self:1},{id:"s4t2",name:"小美",is_self:0},{id:"s4t3",name:"阿强",is_self:0}],
+   expenses:[
+     {id:"s4e1",spent_on:"2026-10-02",category:"交通",amount:200,title:"期初（历史数据）",note:"",payer_id:null,split_mode:"none",is_opening:1,parts:[]},
+     {id:"s4e2",spent_on:"2026-10-02",category:"餐饮",amount:350,title:"期初（历史数据）",note:"",payer_id:null,split_mode:"none",is_opening:1,parts:[]},
+     {id:"s4e3",spent_on:"2026-10-02",category:"门票",amount:120,title:"期初（历史数据）",note:"",payer_id:null,split_mode:"none",is_opening:1,parts:[]},
+     {id:"s4e4",spent_on:"2026-10-02",category:"其他",amount:80,title:"期初（历史数据）",note:"",payer_id:null,split_mode:"none",is_opening:1,parts:[]},
+     {id:"s4e5",spent_on:"2026-10-02",category:"餐饮",amount:480,title:"营地烧烤食材",note:"",payer_id:"s4t1",split_mode:"equal",is_opening:0,parts:["s4t1","s4t2","s4t3"]},
+     {id:"s4e6",spent_on:"2026-10-02",category:"门票",amount:360,title:"营地门票 3 人",note:"",payer_id:"s4t2",split_mode:"equal",is_opening:0,parts:["s4t1","s4t2","s4t3"]},
+     {id:"s4e7",spent_on:"2026-10-03",category:"购物",amount:260,title:"自购露营灯",note:"",payer_id:"s4t1",split_mode:"none",is_opening:0,parts:[]}
+   ]}
 ];
 let routes=[];
-let state={view:"routes",filterYear:"all",search:"",curId:null};
+let state={view:"routes",filterYear:"all",search:"",curId:null,detailTab:"overview"};
 
 /* ---------- 浏览器本地存储（替代后端 API） ---------- */
 function load(){
-  try{const s=localStorage.getItem(LS_KEY);if(s){const a=JSON.parse(s);if(Array.isArray(a)&&a.length)return a;}}catch(e){}
-  const seed=SAMPLE.map(r=>Object.assign({},r));localStorage.setItem(LS_KEY,JSON.stringify(seed));return seed;
+  try{const s=localStorage.getItem(LS_KEY);if(s){const a=JSON.parse(s);if(Array.isArray(a)&&a.length)return a.map(migrateLedger);}}catch(e){}
+  const seed=SAMPLE.map(r=>JSON.parse(JSON.stringify(r))).map(migrateLedger);
+  localStorage.setItem(LS_KEY,JSON.stringify(seed));return seed;
+}
+/* 口径迁移（幂等）：把老的 9 类聚合值转为「期初」流水，使 9 类金额恒由流水派生。
+ * 期初流水无付款人、不参与分摊 —— 历史数据无从得知谁付的钱，不应伪造。
+ * 与后端 initDb 的 migrateAggregatesToOpening 规则一致。 */
+function migrateLedger(r){
+  if(!Array.isArray(r.travelers))r.travelers=[];
+  if(Array.isArray(r.expenses))return r;
+  const list=[];
+  CATS.forEach(c=>{const v=parseFloat(r.exp&&r.exp[c])||0;if(v>0)list.push({
+    id:uid(),spent_on:"",category:c,amount:v,title:"期初（历史数据）",note:"",
+    payer_id:null,split_mode:"none",is_opening:1,parts:[]});});
+  r.expenses=list;
+  return r;
 }
 function persist(){try{localStorage.setItem(LS_KEY,JSON.stringify(routes));}catch(e){}}
 function setSync(t){const el=document.getElementById("syncTxt");if(el)el.textContent=t;}
 function uid(){return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 async function apiGet(){return routes;}
-async function apiPost(obj){const rec=Object.assign({id:uid()},obj);routes.unshift(rec);persist();return rec;}
-async function apiPut(id,obj){const i=routes.findIndex(r=>r.id===id);if(i<0)return null;routes[i]=Object.assign({},routes[i],obj,{id});persist();return routes[i];}
+async function apiPost(obj){const rec=Object.assign({id:uid(),travelers:[],expenses:[],exp:{}},obj);recomputeAgg(rec);routes.unshift(rec);persist();return rec;}
+async function apiPut(id,obj){const i=routes.findIndex(r=>r.id===id);if(i<0)return null;
+  /* 表单不含流水字段，需保留既有 travelers/expenses（否则编辑路线会清空流水） */
+  const keep={travelers:routes[i].travelers,expenses:routes[i].expenses};
+  routes[i]=Object.assign({},routes[i],keep,obj,{id});recomputeAgg(routes[i]);persist();return routes[i];}
 async function apiDelete(id){routes=routes.filter(r=>r.id!==id);persist();}
 async function apiDeleteAll(){routes=[];persist();}
 async function reload(){routes=load();refresh();}
 
 function fmt(n){n=Math.round((n||0)*100)/100;return n.toLocaleString("zh-CN");}
-function totalOf(r){return CATS.reduce((s,c)=>s+(parseFloat(r.exp[c])||0),0);}
-function perOf(r){const t=totalOf(r);const p=parseFloat(r.people)||0;return p>0?Math.round(t/p):null;}
+/* 9 类金额统一由流水派生（物化聚合），exp 仅作为汇总快照供统计复用 */
+function aggOf(r){
+  const out={};CATS.forEach(c=>out[c]=0);
+  (r.expenses||[]).forEach(e=>{if(out[e.category]!==undefined)out[e.category]+=(parseFloat(e.amount)||0);});
+  return out;
+}
+function recomputeAgg(r){r.exp=aggOf(r);return r.exp;}
+function totalOf(r){const a=aggOf(r);return CATS.reduce((s,c)=>s+a[c],0);}
+function headcount(r){const t=r.travelers||[];return t.length?t.length:(parseFloat(r.people)||0);}
+function perOf(r){const t=totalOf(r);const n=headcount(r);return n>0?Math.round(t/n):null;}
+
+/* AA 结算：与后端 settle() 同规则，保证 Σnet = 0
+ *  · 无付款人（期初/未指定）→ 整体不参与结算，计入 unassigned
+ *  · split_mode=none（未选分摊人）→ 由付款人自担，不产生债务
+ *  · 其余按分摊人均分 → owed；net = paid − (owed + selfBorne) */
+function settleOf(r){
+  const ts=r.travelers||[];
+  if(!ts.length)return null;
+  const paid={},owed={},self={};
+  ts.forEach(t=>{paid[t.id]=0;owed[t.id]=0;self[t.id]=0;});
+  let unassigned=0,notSplit=0;
+  (r.expenses||[]).forEach(e=>{
+    const a=parseFloat(e.amount)||0;
+    const by=(e.payer_id&&paid[e.payer_id]!==undefined)?e.payer_id:null;
+    if(!by){unassigned+=a;return;}
+    paid[by]+=a;
+    if(e.split_mode==="none"){notSplit+=a;self[by]+=a;return;}
+    const parts=(e.parts||[]).filter(p=>owed[p]!==undefined);
+    if(!parts.length){notSplit+=a;self[by]+=a;return;}
+    parts.forEach(p=>{owed[p]+=a/parts.length;});
+  });
+  const r2=v=>Math.round(v*100)/100;
+  const rows=ts.map(t=>{const burden=owed[t.id]+self[t.id];
+    return {id:t.id,name:t.name,is_self:!!t.is_self,paid:r2(paid[t.id]),owed:r2(burden),share:r2(owed[t.id]),self_borne:r2(self[t.id]),net:r2(paid[t.id]-burden)};});
+  const C=rows.filter(x=>x.net>0.005).map(x=>({id:x.id,name:x.name,v:x.net})).sort((a,b)=>b.v-a.v);
+  const D=rows.filter(x=>x.net<-0.005).map(x=>({id:x.id,name:x.name,v:-x.net})).sort((a,b)=>b.v-a.v);
+  const transfers=[];let i=0,j=0;
+  while(i<C.length&&j<D.length){const m=Math.min(C[i].v,D[j].v);
+    if(m>0.005)transfers.push({from:D[j].id,from_name:D[j].name,to:C[i].id,to_name:C[i].name,amount:r2(m)});
+    C[i].v-=m;D[j].v-=m;if(C[i].v<0.005)i++;if(D[j].v<0.005)j++;}
+  return {rows:rows,transfers:transfers,summary:{paid:r2(rows.reduce((s,x)=>s+x.paid,0)),
+    owed:r2(rows.reduce((s,x)=>s+x.owed,0)),not_split:r2(notSplit),unassigned:r2(unassigned)}};
+}
 
 function parseStart(dr,year){
   if(!dr)return null;
@@ -351,6 +542,12 @@ function renderYears(){
   ys.forEach(y=>h+='<div class="chip'+(state.filterYear===y?" active":"")+'" data-y="'+y+'">'+y+'</div>');
   box.innerHTML=h;
 }
+function budgetBar(r){
+  const b=parseFloat(r.budget_total)||0;if(b<=0)return '';
+  const spent=totalOf(r);const pct=Math.min(100,Math.round(spent/b*100));const over=spent>b;
+  return '<div class="budget"><div class="budget-bar"><span style="width:'+pct+'%;background:'+(over?'var(--danger)':'var(--accent)')+'"></span></div>'+
+    '<div class="budget-txt">预算 ¥'+fmt(b)+' · 已用 '+pct+'%'+(over?' · 超支 ¥'+fmt(spent-b):'')+'</div></div>';
+}
 function miniBar(r){
   const t=totalOf(r);if(t<=0)return '<div class="minibar"></div>';
   let s='<div class="minibar">';
@@ -371,12 +568,15 @@ function renderRoutes(){
       '<div class="card-top"><div><div class="card-name">'+esc(r.name)+'</div>'+
       '<div class="badges"><span class="badge b-year">'+esc(r.year||"")+'</span>'+
       '<span class="badge b-type">'+esc(r.type||"")+'</span>'+
-      (r.days?'<span class="badge b-days">'+r.days+'天</span>':'')+'</div></div></div>'+
+      (r.days?'<span class="badge b-days">'+r.days+'天</span>':'')+
+      ((r.expenses||[]).length?'<span class="pill pill-ok">流水 '+(r.expenses||[]).length+' 笔</span>':'')+'</div></div></div>'+
       '<div class="card-meta">📅 '+esc(r.daterange||"")+(r.dest?' · '+esc(r.dest):'')+'</div>'+
       '<div class="card-total"><span class="amt">¥'+fmt(t)+'</span>'+(per!=null?'<span class="per">人均 ¥'+fmt(per)+'</span>':'')+'</div>'+
       miniBar(r)+
+      (r.budget_total>0?budgetBar(r):'')+
       '<div class="card-actions"><button class="btn btn-sm" data-act="detail" data-id="'+r.id+'">查看</button>'+
-      '<button class="btn btn-sm" data-act="edit" data-id="'+r.id+'">编辑</button></div>'+
+      '<button class="btn btn-sm" data-act="edit" data-id="'+r.id+'">编辑</button>'+
+      '<button class="btn btn-sm btn-line" data-act="add" data-id="'+r.id+'">＋ 记一笔</button></div>'+
     '</div>';
   }).join("");
 }
@@ -459,11 +659,6 @@ function yearTable(ys){
 }
 
 /* ---------- form ---------- */
-function buildExpInputs(){
-  document.getElementById("expInputs").innerHTML=CATS.map(c=>
-    '<div class="exp-cell"><div class="el"><span class="sw" style="background:'+COLORS[c]+'"></span>'+c+'</div>'+
-    '<input type="number" min="0" step="0.01" id="exp_'+c+'" placeholder="0"></div>').join("");
-}
 function openForm(id){
   state.curId=id||null;
   document.getElementById("formDelete").style.display=id?"inline-flex":"none";
@@ -479,23 +674,35 @@ function openForm(id){
   document.getElementById("f_scenic").value=r?(r.scenic||""):"";
   document.getElementById("f_hotel").value=r?(r.hotel||""):"";
   document.getElementById("f_notes").value=r?(r.notes||""):"";
-  CATS.forEach(c=>document.getElementById("exp_"+c).value=r?(r.exp&&r.exp[c]!=null?r.exp[c]:""):"");
+  /* 花费明细统一由流水派生 */
+  const hint=document.getElementById("expLedgerHintText");
+  if(hint)hint.textContent=r?("9 类花费由逐笔流水自动汇总（当前 "+(r.expenses||[]).length+" 笔），本表单不再手工填写。"):
+    "9 类花费改由「逐笔流水」自动汇总：保存路线后打开「查看 → 流水」记录每一笔消费，总额、人均与结算都会自动算好。";
+  const goBtn=document.getElementById("gotoLedgerBtn");
+  if(goBtn){goBtn.style.display=r?"":"none";
+    goBtn.onclick=()=>{if(!r)return;closeMask("formMask");state.curId=r.id;state.detailTab="ledger";openDetail(r.id);};}
   openMask("formMask");
 }
 async function saveForm(){
   const name=document.getElementById("f_name").value.trim();
   if(!name){toast("请填写路线名称");return;}
-  const exp={};CATS.forEach(c=>exp[c]=parseFloat(document.getElementById("exp_"+c).value)||0);
+  /* 不再提交 exp：9 类花费统一由流水汇总 */
   const obj={name:name,year:document.getElementById("f_year").value.trim(),daterange:document.getElementById("f_daterange").value.trim(),
     type:document.getElementById("f_type").value,days:parseInt(document.getElementById("f_days").value)||0,
     people:parseInt(document.getElementById("f_people").value)||0,dest:document.getElementById("f_dest").value.trim(),
     scenic:document.getElementById("f_scenic").value,hotel:document.getElementById("f_hotel").value,
-    notes:document.getElementById("f_notes").value,exp:exp};
+    notes:document.getElementById("f_notes").value};
   setSync("保存中…");
   try{
-    if(state.curId){await apiPut(state.curId,obj);toast("已保存");}
-    else{await apiPost(obj);toast("已新增路线");}
-    closeMask("formMask");await reload();setSync("已存浏览器本地");
+    if(state.curId){await apiPut(state.curId,obj);toast("已保存");closeMask("formMask");await reload();}
+    else{
+      const rec=await apiPost(Object.assign({travelers:[],expenses:[],exp:{}},obj));
+      toast("已新增路线，接下来可以逐笔记录花费");
+      closeMask("formMask");await reload();
+      state.curId=rec.id;state.detailTab="ledger";openDetail(rec.id);   /* 新增后直达流水 */
+      setSync("已存浏览器本地");return;
+    }
+    setSync("已存浏览器本地");
   }catch(e){toast("保存失败，请重试");setSync("已存浏览器本地");}
 }
 async function deleteRoute(id){
@@ -504,10 +711,41 @@ async function deleteRoute(id){
   catch(e){toast("删除失败，请重试");}
 }
 
-/* ---------- detail ---------- */
+/* ---------- detail（概览 / 流水 / 结算） ---------- */
 function openDetail(id){
   const r=routes.find(x=>x.id===id);if(!r)return;state.curId=id;
+  if(!state.detailTab)state.detailTab="overview";
   document.getElementById("d_name").textContent=r.name;
+  paintDetailTabs();
+  renderDetailTab();
+  openMask("detailMask");
+}
+function paintDetailTabs(){
+  const box=document.getElementById("d_tabs");if(!box)return;
+  const tabs=[["overview","概览"],["ledger","流水"],["settle","结算"]];
+  box.innerHTML=tabs.map(t=>'<div class="tab'+(state.detailTab===t[0]?" active":"")+'" data-tab="'+t[0]+'">'+t[1]+'</div>').join("");
+  box.querySelectorAll("[data-tab]").forEach(el=>{el.onclick=()=>{
+    if(state.detailTab===el.dataset.tab)return;
+    state.detailTab=el.dataset.tab;paintDetailTabs();renderDetailTab();};});
+}
+function renderDetailTab(){
+  const r=routes.find(x=>x.id===state.curId);if(!r)return;
+  const body=document.getElementById("d_body");const acts=document.getElementById("d_actions");
+  if(state.detailTab==="overview"){
+    acts.innerHTML='<button class="btn" id="d_edit">编辑</button><button class="btn btn-primary" data-close="detailMask">关闭</button>';
+    const eb=document.getElementById("d_edit");
+    if(eb)eb.onclick=()=>{closeMask("detailMask");openForm(r.id);};
+    acts.querySelectorAll("[data-close]").forEach(b=>{b.onclick=()=>closeMask(b.dataset.close);});
+    renderOverview(r,body);
+    return;
+  }
+  acts.innerHTML='<button class="btn" id="d_ledgerTv">同行人</button><button class="btn btn-primary" id="d_ledgerAdd">＋ 记一笔</button>';
+  document.getElementById("d_ledgerTv").onclick=()=>openTravelersSheet(r.id);
+  document.getElementById("d_ledgerAdd").onclick=()=>openExpenseSheet(r.id,null);
+  if(state.detailTab==="ledger")renderLedger(r,body);
+  else renderSettle(r,body);
+}
+function renderOverview(r,body){
   const t=totalOf(r);const per=perOf(r);
   let h='';
   h+=row("年份 / 类型",(r.year||"")+" · "+(r.type||""));
@@ -515,17 +753,253 @@ function openDetail(id){
   h+=row("目的地",r.dest||"—");
   h+=row("住宿",r.hotel||"—");
   h+=row("总花费",addYen(t)+(per!=null?"（人均 "+addYen(per)+"）":""));
+  if(parseFloat(r.budget_total)>0){const over=t>r.budget_total;
+    h+=row("预算","¥"+fmt(r.budget_total)+(over?' · <span style="color:var(--danger)">超支 ¥'+fmt(t-r.budget_total)+'</span>':' · 剩余 ¥'+fmt(r.budget_total-t)));}
   h+='<div class="detail-row"><span class="k">景点路线</span></div><div class="pre-wrap">'+(r.scenic?esc(r.scenic):"—")+'</div>';
   h+='<div style="height:10px"></div><div class="detail-row"><span class="k">9 类花费明细</span><span class="v">合计 '+addYen(t)+'</span></div>';
-  CATS.forEach(c=>{const v=parseFloat(r.exp[c])||0;h+=detailExp(c,v,t);});
+  const a=aggOf(r);
+  CATS.forEach(c=>h+=detailExp(c,a[c]||0,t));
   if(r.notes)h+='<div style="height:10px"></div><div class="detail-row"><span class="k">备注</span></div><div class="pre-wrap">'+esc(r.notes)+'</div>';
-  document.getElementById("d_body").innerHTML=h;
-  openMask("detailMask");
+  h+='<div class="banner" style="margin-top:12px">以上 9 类金额由<b>逐笔流水</b>自动汇总（共 '+(r.expenses||[]).length+' 笔）。'+
+    '<div style="margin-top:8px"><button class="btn btn-sm btn-line" id="d_gotoLedger">查看 / 记录流水</button></div></div>';
+  body.innerHTML=h;
+  const g=document.getElementById("d_gotoLedger");
+  if(g)g.onclick=()=>{state.detailTab="ledger";paintDetailTabs();renderDetailTab();};
+}
+
+/* ---------- 流水 ---------- */
+let L={routeId:null,cat:"全部"};
+function tvColor(r,t){const i=(r.travelers||[]).findIndex(x=>x.id===(t&&t.id?t.id:t));return TVC[(i<0?0:i)%TVC.length];}
+function initial(n){return String(n||"?").slice(0,1);}
+function findTv(r,id){return (r.travelers||[]).find(t=>t.id===id)||null;}
+function renderLedger(r,body){
+  const used=CATS.filter(c=>(r.expenses||[]).some(e=>e.category===c));
+  const list=(r.expenses||[]).filter(e=>L.cat==="全部"||e.category===L.cat);
+  const sum=list.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const hc=headcount(r);
+  let h='<div class="toolbar" style="margin:0 0 10px"><div class="chip-row grow">'+
+    ["全部"].concat(used).map(c=>'<div class="chip'+(L.cat===c?" active":"")+'" data-cat="'+c+'">'+c+'</div>').join("")+
+    '</div><button class="btn btn-sm" id="lgTv">同行人（'+(r.travelers||[]).length+'）</button>'+
+    '<button class="btn btn-primary" id="lgAdd">记一笔</button></div>';
+  h+='<div class="panel" style="box-shadow:none;padding:12px;margin-bottom:12px">'+
+    '<div class="kv"><span class="k">'+(L.cat==="全部"?"全部流水":L.cat+"（筛选）")+'</span><span class="v">'+list.length+' 笔 · ¥'+fmt(sum)+'</span></div>'+
+    '<div class="kv"><span class="k">路线总花费 / 人均</span><span class="v">¥'+fmt(totalOf(r))+(hc>0?" · 人均 ¥"+fmt(totalOf(r)/hc):"")+'</span></div></div>';
+  if(!list.length){
+    h+=L.cat==="全部"?'<div class="empty">还没有流水，记下第一笔吧 ✈<div class="led-empty-actions"><button class="btn btn-sm btn-primary" id="lgAdd2">＋ 记一笔</button></div></div>'
+      :'<div class="empty">该分类下暂无流水</div>';
+    body.innerHTML=h;bindLedger(r,body,false);return;
+  }
+  const days={};
+  list.forEach(e=>{const k=e.spent_on||"__none__";(days[k]||(days[k]=[])).push(e);});
+  Object.keys(days).sort((a,b)=>(a==="__none__"?"":a)<(b==="__none__"?"":b)?1:-1).forEach(d=>{
+    const ds=days[d].reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+    h+='<div class="led-day">'+(d==="__none__"?"未标注日期":d.replace(/-/g,"/"))+' · ¥'+fmt(ds)+'</div>';
+    days[d].forEach(e=>{
+      const payer=findTv(r,e.payer_id);const parts=(e.parts||[]).map(p=>findTv(r,p)).filter(Boolean);
+      let share;
+      if(e.is_opening)share="期初结转 · 不参与分摊";
+      else if(!parts.length)share="未计入分摊（仅记录实付）";
+      else if(parts.length===1)share="仅 "+esc(parts[0].name)+" 承担";
+      else if((r.travelers||[]).length&&parts.length===r.travelers.length)share=parts.length+" 人平分";
+      else share=parts.length+" 人分摊 · 非全员";
+      h+='<div class="led" data-exp="'+e.id+'"><span class="sw" style="background:'+COLORS[e.category]+'"></span>'+
+        '<div class="t"><div class="n">'+esc(e.title||e.category)+'</div>'+
+        '<div class="m"><span>'+esc(e.category)+'</span><span>·</span><span>'+(payer?esc(payer.name)+" 付":"未指定付款人")+'</span>'+
+        '<span class="led-share">'+share+'</span></div></div>'+
+        '<span class="amt">¥'+fmt(e.amount)+'</span></div>';
+    });
+  });
+  body.innerHTML=h;bindLedger(r,body,true);
+}
+function bindLedger(r,body,hasRows){
+  const add=body.querySelector("#lgAdd")||body.querySelector("#lgAdd2");
+  if(add)add.onclick=()=>openExpenseSheet(r.id,null);
+  const tv=body.querySelector("#lgTv");
+  if(tv)tv.onclick=()=>openTravelersSheet(r.id);
+  body.querySelectorAll("[data-cat]").forEach(c=>{c.onclick=()=>{L.cat=c.dataset.cat;renderLedger(r,body);};});
+  if(!hasRows)return;
+  body.querySelectorAll(".led[data-exp]").forEach(el=>{el.onclick=()=>openExpenseSheet(r.id,el.dataset.exp);});
+}
+
+/* ---------- 结算 ---------- */
+function renderSettle(r,body){
+  const sd=settleOf(r);
+  if(!sd){body.innerHTML='<div class="empty">还没有同行人，先登记名单才能做 AA 结算'+
+    '<div class="led-empty-actions"><button class="btn btn-sm btn-primary" id="stAddTv">添加同行人</button></div></div>';
+    const b=body.querySelector("#stAddTv");if(b)b.onclick=()=>openTravelersSheet(r.id);return;}
+  const sm=sd.summary;
+  let h='<div class="panel" style="box-shadow:none;padding:14px;margin-bottom:12px"><h3>每人实付 / 应负担</h3>'+
+    '<div class="table-wrap" style="box-shadow:none"><table class="tbl" style="min-width:auto">'+
+    '<thead><tr><th>同行人</th><th style="text-align:right">实付</th><th style="text-align:right">应负担</th><th style="text-align:right">差额</th></tr></thead><tbody>';
+  sd.rows.forEach(x=>{
+    h+='<tr><td><span class="tv-row"><span class="tv '+(x.is_self?"tv-me":"")+'" style="background:'+tvColor(r,x)+'">'+esc(initial(x.name))+'</span>'+esc(x.name)+
+      (x.is_self?' <span class="pill pill-user">我</span>':'')+'</span></td>'+
+      '<td style="text-align:right">¥'+fmt(x.paid)+'</td><td style="text-align:right">¥'+fmt(x.owed)+'</td>'+
+      '<td style="text-align:right" class="settle-net '+(x.net>=0?"net-plus":"net-minus")+'">'+(x.net>=0?"+":"−")+'¥'+fmt(Math.abs(x.net))+'</td></tr>';
+  });
+  h+='</tbody></table></div><div class="caliber">实付合计 ¥'+fmt(sm.paid)+' · 应负担合计 ¥'+fmt(sm.owed)+caliberNote(sm)+'</div></div>';
+  h+='<div class="panel" style="box-shadow:none;padding:14px"><h3>最少转账方案 <span class="hint" style="font-weight:400">共 '+sd.transfers.length+' 笔</span></h3>';
+  h+=sd.transfers.length?sd.transfers.map(t=>'<div class="tf">'+
+      '<span class="tv tv-sm" style="background:'+tvColor(r,{id:t.from})+'">'+esc(initial(t.from_name))+'</span><span>'+esc(t.from_name)+'</span>'+
+      '<span class="arrow">→</span><span class="tv tv-sm" style="background:'+tvColor(r,{id:t.to})+'">'+esc(initial(t.to_name))+'</span>'+
+      '<span>'+esc(t.to_name)+'</span><span class="amt">¥'+fmt(t.amount)+'</span></div>').join("")
+    :'<div class="empty">账已平，无需转账 🎉</div>';
+  h+='<div class="caliber">转账笔数 ≤ 人数 − 1；金额四舍五入到分，差额小于 0.01 时视为已平。</div></div>';
+  h+='<div class="toolbar" style="margin-top:12px"><button class="btn btn-sm" id="stTv">管理同行人</button>'+
+    '<button class="btn btn-sm" id="stGo">去记流水</button></div>';
+  body.innerHTML=h;
+  const a=body.querySelector("#stTv");if(a)a.onclick=()=>openTravelersSheet(r.id);
+  const b=body.querySelector("#stGo");if(b)b.onclick=()=>{state.detailTab="ledger";paintDetailTabs();renderDetailTab();};
+}
+function caliberNote(sm){
+  const p=[];
+  if(sm.unassigned>0)p.push("其中有 ¥"+fmt(sm.unassigned)+" 未指定付款人（含历史期初数据），不参与结算");
+  if(sm.not_split>0)p.push("¥"+fmt(sm.not_split)+" 为未计入分摊的自付支出，由付款人自行承担");
+  return p.length?"；"+p.join("；"):"；账目完整闭合";
 }
 function row(k,v){return '<div class="detail-row"><span class="k">'+k+'</span><span class="v">'+esc(v)+'</span></div>';}
 function detailExp(c,v,t){const pct=t>0?Math.round(v/t*100):0;
   return '<div class="detail-row"><span class="k"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:'+COLORS[c]+';margin-right:6px"></span>'+c+'</span>'+
     '<span class="v">¥'+fmt(v)+' <span style="color:var(--muted);font-weight:400;font-size:12px">'+pct+'%</span></span></div>';}
+
+/* ---------- 记一笔 ---------- */
+const TVC=["#60a5fa","#3b82f6","#06b6d4","#f59e0b","#ef6b5e","#a78bfa","#ec4899","#fb923c","#94a3b8"];
+const QUICK=[50,100,200,500,1000];
+let D={routeId:null,editing:null,draft:null};
+function openExpenseSheet(routeId,expId){
+  const r=routes.find(x=>x.id===routeId);if(!r)return;
+  if(!(r.travelers||[]).length&&!(parseFloat(r.people)>0)){toast("请先添加同行人");return openTravelersSheet(routeId);}
+  D.routeId=routeId;
+  const e=expId?(r.expenses||[]).find(x=>x.id===expId):null;
+  D.editing=e?e.id:null;
+  const ts=r.travelers||[];const self=ts.find(t=>t.is_self)||ts[0];
+  D.draft=e?{amount:e.amount,category:e.category,date:e.spent_on||"",title:e.title||"",note:e.note||"",
+      payer:e.payer_id||(self?self.id:null),parts:(e.parts||[]).slice()}
+    :{amount:"",category:"餐饮",date:"",title:"",note:"",payer:self?self.id:null,parts:ts.map(t=>t.id)};
+  document.getElementById("e_title").textContent=e?"编辑流水":"记一笔";
+  document.getElementById("e_del").style.display=e?"":"none";
+  document.getElementById("e_quick").innerHTML=QUICK.map(q=>'<div class="chip" data-q="'+q+'">¥'+fmt(q)+'</div>').join("");
+  paintESheet(r);
+  document.getElementById("e_amount").value=D.draft.amount;
+  document.getElementById("e_date").value=D.draft.date;
+  document.getElementById("e_name").value=D.draft.title;
+  document.getElementById("e_note").value=D.draft.note;
+  bindESheet(r);
+  syncHint(r);
+  openMask("expMask");
+}
+function paintESheet(r){
+  document.getElementById("e_cats").innerHTML=CATS.map(c=>'<div class="chip'+(D.draft.category===c?" active":"")+'" data-c="'+c+'">'+
+    '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+COLORS[c]+';margin-right:5px"></span>'+c+'</div>').join("");
+  document.querySelectorAll("#e_cats [data-c]").forEach(el=>{el.onclick=()=>{D.draft.category=el.dataset.c;
+    document.querySelectorAll("#e_cats .chip").forEach(x=>x.classList.toggle("active",x===el));};});
+  document.getElementById("e_payer").innerHTML=(r.travelers||[]).map(t=>'<div class="chip'+(D.draft.payer===t.id?" active":"")+'" data-p="'+t.id+'">'+
+    '<span class="tv tv-sm" style="background:'+tvColor(r,t)+';margin-right:4px">'+esc(initial(t.name))+'</span>'+esc(t.name)+'</div>').join("");
+  document.querySelectorAll("#e_payer [data-p]").forEach(el=>{el.onclick=()=>{D.draft.payer=el.dataset.p;
+    document.querySelectorAll("#e_payer .chip").forEach(x=>x.classList.toggle("active",x===el));syncHint(r);};});
+  paintParts(r);
+}
+function paintParts(r){
+  document.getElementById("e_parts").innerHTML=(r.travelers||[]).map(t=>{const on=D.draft.parts.includes(t.id);
+    return '<div class="chip has-tick'+(on?" active":"")+'" data-s="'+t.id+'">'+(on?'<span class="tick">✓</span>':'')+esc(t.name)+'</div>';}).join("");
+  document.querySelectorAll("#e_parts [data-s]").forEach(el=>{el.onclick=()=>{
+    const id=el.dataset.s,i=D.draft.parts.indexOf(id);
+    if(i>=0)D.draft.parts.splice(i,1);else D.draft.parts.push(id);
+    paintParts(r);};});
+  syncHint(r);
+}
+function syncHint(r){
+  const a=parseFloat(D.draft.amount)||0;const n=D.draft.parts.length;const h=document.getElementById("e_hint");
+  const payer=findTv(r,D.draft.payer);
+  if(!(a>0)){h.className="split-hint"+(n?"":" warn");
+    h.textContent=n?("已选 "+n+" 人参与分摊，输入金额后显示每人应付"):"⚠ 未选择分摊人：这笔将不计入任何人的应分担（仅记录实付）";return;}
+  if(!n){h.className="split-hint warn";h.textContent="⚠ 未选择分摊人：这笔将不计入任何人的应分担（仅记录实付）";return;}
+  h.className="split-hint";
+  h.innerHTML=n+" 人平分，每人 <b style=\"font-size:15px\">¥"+fmt(a/n)+"</b>"+(payer?" · 由 "+esc(payer.name)+" 垫付":"");
+}
+function bindESheet(r){
+  const amount=document.getElementById("e_amount");
+  amount.oninput=()=>{D.draft.amount=amount.value;syncHint(r);};
+  const date=document.getElementById("e_date");date.onchange=()=>{D.draft.date=date.value;};
+  const name=document.getElementById("e_name");name.oninput=()=>{D.draft.title=name.value;};
+  const note=document.getElementById("e_note");note.oninput=()=>{D.draft.note=note.value;};
+  document.querySelectorAll("#e_quick [data-q]").forEach(el=>{el.onclick=()=>{D.draft.amount=el.dataset.q;amount.value=el.dataset.q;syncHint(r);};});
+  document.getElementById("e_all").onclick=()=>{D.draft.parts=(r.travelers||[]).map(t=>t.id);paintParts(r);};
+  document.getElementById("e_none").onclick=()=>{D.draft.parts=[];paintParts(r);};
+}
+async function saveExpense(){
+  const r=routes.find(x=>x.id===D.routeId);if(!r)return;
+  const a=parseFloat(D.draft.amount);
+  if(!(a>0))return toast("请填写大于 0 的金额");
+  const obj={spent_on:D.draft.date,category:D.draft.category,amount:a,title:D.draft.title.trim(),
+    note:D.draft.note.trim(),payer_id:D.draft.payer,
+    split_mode:D.draft.parts.length?"equal":"none",parts:D.draft.parts.slice(),is_opening:0};
+  if(!Array.isArray(r.expenses))r.expenses=[];
+  if(D.editing){const e=r.expenses.find(x=>x.id===D.editing);Object.assign(e,obj);}
+  else r.expenses.push(Object.assign({id:uid()},obj));
+  recomputeAgg(r);persist();
+  closeMask("expMask");toast(D.editing?"已保存":"已记一笔 ¥"+fmt(a));
+  renderDetailTab();refresh();
+}
+function deleteExpense(){
+  const r=routes.find(x=>x.id===D.routeId);if(!r||!D.editing)return;
+  if(!confirm("删除这笔流水？"))return;
+  r.expenses=r.expenses.filter(x=>x.id!==D.editing);
+  recomputeAgg(r);persist();
+  closeMask("expMask");toast("已删除");renderDetailTab();refresh();
+}
+
+/* ---------- 同行人 ---------- */
+function openTravelersSheet(routeId){
+  const r=routes.find(x=>x.id===routeId);if(!r)return;
+  if(!Array.isArray(r.travelers))r.travelers=[];
+  D.routeId=routeId;
+  paintTravelers(r);openMask("tvMask");
+}
+function paintTravelers(r){
+  const ts=r.travelers||[];const people=parseInt(r.people)||0;
+  document.getElementById("t_people").textContent=people?people+" 人":"未填写";
+  document.getElementById("t_count").textContent=ts.length+" 人"+(people&&ts.length&&people!==ts.length?"（与人数不一致）":"");
+  document.getElementById("t_list").innerHTML=ts.length?ts.map(t=>'<div class="tv-item">'+
+    '<span class="tv" style="background:'+tvColor(r,t)+'">'+esc(initial(t.name))+'</span>'+
+    '<span class="tv-name">'+esc(t.name)+(t.is_self?' <span class="pill pill-user">我</span>':'')+'</span>'+
+    '<button class="btn btn-sm" data-edit="'+t.id+'">改</button>'+
+    (t.is_self?"":'<button class="btn btn-sm" data-self="'+t.id+'">设为我</button>')+
+    '<button class="btn btn-sm btn-danger" data-del="'+t.id+'">移除</button></div>').join(""):'<div class="empty">还没有同行人</div>';
+  document.querySelectorAll("#t_list [data-edit]").forEach(b=>{b.onclick=()=>{
+    const t=findTv(r,b.dataset.edit);const name=prompt("修改姓名",t?t.name:"");
+    if(name===null)return;if(!String(name).trim())return toast("姓名不能为空");
+    const dup=r.travelers.some(x=>x.name===String(name).trim()&&x.id!==b.dataset.edit);
+    if(dup)return toast("同名同行人已存在");
+    t.name=String(name).trim();persist();paintTravelers(r);refresh();};});
+  document.querySelectorAll("#t_list [data-self]").forEach(b=>{b.onclick=()=>{
+    r.travelers.forEach(x=>{x.is_self=x.id===b.dataset.self?1:0;});
+    persist();paintTravelers(r);toast("已标记为「我」");};});
+  document.querySelectorAll("#t_list [data-del]").forEach(b=>{b.onclick=()=>{
+    const id=b.dataset.del;
+    const used=(r.expenses||[]).filter(e=>e.payer_id===id||(e.parts||[]).includes(id)).length;
+    if(used&&!confirm("该同行人已被 "+used+" 笔流水引用。\n\n删除后：其作为付款人的流水将变为「未指定付款人」，其分摊份额会被移除。\n\n确定继续？"))return;
+    r.expenses=(r.expenses||[]).map(e=>{if(e.payer_id===id)e.payer_id=null;
+      if((e.parts||[]).includes(id))e.parts=e.parts.filter(p=>p!==id);return e;});
+    r.travelers=r.travelers.filter(x=>x.id!==id);
+    persist();paintTravelers(r);renderDetailTab();refresh();toast("已移除");};});
+}
+async function addTravelers(){
+  const r=routes.find(x=>x.id===D.routeId);if(!r)return;
+  const raw=document.getElementById("t_new").value.trim();
+  if(!raw)return toast("请输入姓名");
+  const names=raw.split(/[,，、\s]+/).filter(Boolean);
+  const exist=new Set(r.travelers.map(t=>t.name));
+  let hasSelf=r.travelers.some(t=>t.is_self);
+  let added=0;
+  names.forEach(n=>{if(!n||exist.has(n))return;exist.add(n);
+    /* 首位新成员默认标为「我」，与正式版一致 */
+    const self=hasSelf?0:1;hasSelf=true;
+    r.travelers.push({id:uid(),name:n,is_self:self});added++;});
+  document.getElementById("t_new").value="";
+  persist();paintTravelers(r);renderDetailTab();refresh();
+  toast("已添加 "+added+" 位同行人");
+}
 
 /* ---------- backup（演示：仅操作浏览器本地） ---------- */
 function exportData(){
@@ -569,12 +1043,18 @@ document.getElementById("yearChips").onclick=e=>{const c=e.target.closest("[data
 document.getElementById("statYearChips").onclick=e=>{const c=e.target.closest("[data-sy]");if(c){state.filterYear=c.dataset.sy;renderStats();}};
 document.getElementById("search").oninput=e=>{state.search=e.target.value;renderRoutes();};
 document.getElementById("routeGrid").onclick=e=>{const b=e.target.closest("[data-act]");if(!b)return;const id=b.dataset.id;
-  if(b.dataset.act==="detail")openDetail(id);else if(b.dataset.act==="edit")openForm(id);};
+  if(b.dataset.act==="detail")openDetail(id);
+  else if(b.dataset.act==="edit")openForm(id);
+  /* 卡片上的「记一笔」：直接进入该路线的流水页签并打开记账表单 */
+  else if(b.dataset.act==="add"){state.curId=id;state.detailTab="ledger";openDetail(id);openExpenseSheet(id,null);}};
 document.getElementById("upList").onclick=e=>{const b=e.target.closest("[data-act]");if(b)openDetail(b.dataset.id);};
 document.getElementById("addBtn").onclick=()=>openForm(null);
 document.getElementById("formSave").onclick=saveForm;
 document.getElementById("formDelete").onclick=()=>deleteRoute(state.curId);
-document.getElementById("d_edit").onclick=()=>{closeMask("detailMask");openForm(state.curId);};
+/* 详情底部按钮改为按页签动态生成，绑定点在 renderDetailTab() 内 */
+document.getElementById("e_save").onclick=saveExpense;
+document.getElementById("e_del").onclick=deleteExpense;
+document.getElementById("t_add").onclick=addTravelers;
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>closeMask(b.dataset.close));
 document.querySelectorAll(".mask").forEach(m=>m.onclick=e=>{if(e.target===m)closeMask(m.id);});
 document.getElementById("backupBtn").onclick=()=>document.getElementById("backupMenu").classList.toggle("open");
@@ -585,7 +1065,6 @@ document.getElementById("fileInput").onchange=e=>{if(e.target.files[0])importDat
 document.addEventListener("click",e=>{if(!e.target.closest(".menu"))document.getElementById("backupMenu").classList.remove("open");});
 
 /* ---------- init ---------- */
-buildExpInputs();
 (async ()=>{
   setSync("加载中…");
   try{routes=load();setSync("演示·数据在浏览器");refresh();}

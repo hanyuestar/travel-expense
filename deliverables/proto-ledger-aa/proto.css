@@ -1,0 +1,80 @@
+/* proto.css — 交互原型「新增组件」样式
+ * 仅承载现有 styles.css 未覆盖的少量新组件；全部复用既有 CSS 变量（--primary / --line / --muted /
+ * --danger / --accent / --c0..--c8），不引入新色值、不覆盖既有类，保证与线上视觉同源。
+ * 落地时本文件的规则应合并进 public/styles.css，本文件随之删除。
+ */
+
+/* ---------- Tab 复用说明 ----------
+ * 详情弹层的「概览 / 流水 / 结算」直接复用登录页的 .tabs / .tab / .tab.active
+ * （styles.css:163-166），此处不加任何样式，仅用于原型演示时补一个外间距。 */
+.sheet .tabs{margin-top:2px}
+
+/* ---------- 同行人头像（复用未使用的 --c0..--c8 调色板） ---------- */
+.tv{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;color:#fff;flex:0 0 auto;letter-spacing:.5px}
+.tv-sm{width:22px;height:22px;font-size:11px}
+.tv-row{display:flex;align-items:center;gap:7px;font-size:13.5px}
+.tv-me{box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--primary-l)}
+
+/* ---------- 可多选成员 chip（在 .chip 上叠加对勾） ---------- */
+.chip .tick{font-weight:800;margin-right:2px}
+.chip.has-tick{padding-left:10px}
+
+/* ---------- 流水列表 ---------- */
+.led-day{font-size:12px;font-weight:700;color:var(--muted);padding:10px 2px 6px;letter-spacing:.4px}
+.led{display:flex;align-items:center;gap:10px;padding:10px 11px;border:1px solid var(--line);border-radius:12px;
+  background:#fff;margin-bottom:7px}
+.led:active{background:#fafefc}
+.led .sw{width:9px;height:9px;border-radius:3px;flex:0 0 auto}
+.led .t{flex:1;min-width:0}
+.led .t .n{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.led .t .m{font-size:11.5px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.led .amt{font-size:15px;font-weight:700;color:var(--primary-d);white-space:nowrap}
+.led-share{background:#f7fbfa;border:1px dashed var(--line);border-radius:9px;padding:3px 7px;font-size:11px;color:var(--muted)}
+
+/* 流水空状态内的主行动按钮组 */
+.led-empty-actions{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+
+/* ---------- 结算 ---------- */
+.settle-net{font-weight:700}
+.net-plus{color:var(--primary-d)}   /* 应收回（别人欠我）—— 沿用项目「主色=健康」语义 */
+.net-minus{color:var(--danger)}     /* 应付出（我欠别人）—— 沿用项目「红=超支/风险」语义 */
+.tf{display:flex;align-items:center;gap:9px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;
+  background:#fff;margin-bottom:8px}
+.tf .arrow{color:var(--muted);font-weight:700}
+.tf .amt{margin-left:auto;font-weight:800;color:var(--primary-d);font-size:15px;white-space:nowrap}
+.tf-note{font-size:11.5px;color:var(--muted);margin-top:-2px}
+
+/* ---------- 记一笔：金额输入（大号） ---------- */
+.amt-input{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:12px;
+  padding:10px 12px;background:#fff}
+.amt-input .cur{font-size:18px;font-weight:700;color:var(--muted)}
+.amt-input input{border:none;padding:0;font-size:24px;font-weight:800;color:var(--text);background:transparent}
+.amt-input input:focus{outline:none;box-shadow:none}
+
+/* 快捷金额（复用 .chip） */
+.quick-amt{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+
+/* 分摊结果提示条 */
+.split-hint{display:flex;align-items:center;gap:8px;background:var(--primary-l);color:var(--primary-d);
+  border-radius:10px;padding:9px 11px;font-size:13px;font-weight:600;margin-top:9px}
+.split-hint.warn{background:#fdece8;color:var(--danger)}
+
+/* ---------- 补齐线上缺失样式（发现的问题，见 README「发现的问题」） ----------
+ * app.js:227 budgetBar() 输出 .budget / .budget-bar / .budget-txt，但 public/styles.css 中
+ * 无任何对应规则（已全局 grep 确认），导致「预算进度条」在线上实际不可见（span 为行内元素且无高度）。
+ * 以下为按现有视觉语言补的规则，原型据此渲染；建议同步修进 public/styles.css。 */
+.budget{margin-top:1px}
+.budget-bar{height:7px;border-radius:6px;background:#eef3f1;overflow:hidden}
+.budget-bar span{display:block;height:100%;border-radius:6px;transition:width .2s}
+.budget-txt{font-size:11.5px;color:var(--muted);margin-top:5px}
+
+/* ---------- 原型操作条（仅原型使用，落地不保留） ----------
+ * 采用文档流（非 fixed）置于 header 之下，避免浮层遮挡 .sheet 的底部操作按钮。 */
+.proto-bar{background:#1f2d2b;color:#fff;padding:8px 14px;display:flex;gap:8px;align-items:center;
+  justify-content:center;flex-wrap:wrap;font-size:12.5px}
+.proto-bar .pb{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22);color:#fff;
+  border-radius:9px;padding:6px 11px;font-size:12.5px;font-weight:600;cursor:pointer}
+.proto-bar .pb:hover{background:rgba(255,255,255,.26)}
+.proto-bar .pb.on{background:var(--primary);border-color:var(--primary)}
+.proto-bar .ptag{font-weight:700;letter-spacing:.6px;opacity:.95}
