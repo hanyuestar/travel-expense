@@ -177,6 +177,7 @@ async function handle(req, res, url, body) {
   /* ---------- AI 配置 ---------- */
   if (rest === '/ai-config' && method === 'GET') {
     const c = dbModule.getAiConfig();
+    const D = aiService.DEFAULT_PROMPTS;
     const enabledUserIds = dbModule.getAiEnabledUserIds();
     /* 返回已启用用户的简要信息（id+用户名+邮箱），方便前端回显 */
     const enabledUsers = enabledUserIds.length > 0
@@ -189,6 +190,12 @@ async function handle(req, res, url, body) {
       model_id: c.model_id,
       enabled: c.enabled,
       skip_ssl_verify: c.skip_ssl_verify,
+      /* 提示词：数据库为空时回填内置默认，保证编辑框始终展示当前生效内容 */
+      plan_system_prompt: c.plan_system_prompt || D.plan_system_prompt,
+      plan_user_prompt: c.plan_user_prompt || D.plan_user_prompt,
+      chat_system_prompt: c.chat_system_prompt || D.chat_system_prompt,
+      chat_user_prompt: c.chat_user_prompt || D.chat_user_prompt,
+      default_prompts: D,
       enabled_users: enabledUsers.map(u => ({ id: u.id, username: u.username || '', email: u.email || '' }))
     });
   }
@@ -199,7 +206,11 @@ async function handle(req, res, url, body) {
       api_key: b.api_key,
       model_id: b.model_id,
       enabled: !!b.enabled,
-      skip_ssl_verify: !!b.skip_ssl_verify
+      skip_ssl_verify: !!b.skip_ssl_verify,
+      plan_system_prompt: b.plan_system_prompt,
+      plan_user_prompt: b.plan_user_prompt,
+      chat_system_prompt: b.chat_system_prompt,
+      chat_user_prompt: b.chat_user_prompt
     }, admin.id);
     dbModule.audit(admin.id, 'update_ai_config', 'ai_config', '1', '更新 AI 模型配置', ip);
     return ok(res, true);

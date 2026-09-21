@@ -1,132 +1,375 @@
-// 在 `cap sync` 生成的安卓原生工程之上，注入本项目所需的原生定制：
-//   1) 允许 WebView 接受第三方 Cookie（跨域直连自托管服务器时保持登录态）
-//   2) 按主机放行的 SSL 错误处理（仅对内置服务器地址忽略证书信任错误，不盲目放行）
-//
-// 为什么需要它：android/ 是 Capacitor 生成的产物、被 .gitignore 忽略，不入库。
-// 若只改本地 android/ 下的 MainActivity.java，新版 clone 执行 `cap add android` 后会丢失定制。
-// 本脚本幂等：每次 `npm run sync` 后重跑即可；已定制则跳过。
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+#!/usr/bin/env node
+/* patch-native.mjs — Capacitor 原生工程定制（幂等，可随 cap sync 反复执行）
+ * 1. 允许第三方 Cookie（WebView 内 SPA 跨域访问自托管服务器时会话 Cookie 正常）；
+ * 2. 从 assets/public/index.html 解析内置服务器地址，得到可信主机白名单；
+ * 3. 对可信主机放行 SSL 错误（自签名 / 证书链不完整，如 Synology NAS）；
+ * 4. web 层热更新：启动加载 files/www 已下载版本，后台拉 /api/app/manifest 比对指纹，
+ *    全量下载到 www-new 并逐文件 sha256 校验，原子替换后 setServerBasePath 热刷新。
+ * 若 MainActivity.java 已含标记则跳过（不覆盖用户改动）。
+ * 注意：content 使用 String.raw，Java 中的反斜杠（\n、\"、\\）原样保留，无需双写。 */
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const target = join(
-  __dirname, '..', 'android', 'app', 'src', 'main', 'java',
-  'com', 'hanyuestar', 'travelexpense', 'MainActivity.java'
-);
-
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const target = join(root, 'android/app/src/main/java/com/hanyuestar/travelexpense/MainActivity.java');
 const MARKER = '// TE_NATIVE_PATCHED';
 
-const content = `// TE_NATIVE_PATCHED
-package com.hanyuestar.travelexpense;
+if (existsSync(target)) {
+  const cur = readFileSync(target, 'utf8');
+  if (cur.includes(MARKER)) {
+    console.log('[patch-native] MainActivity 已包含定制，跳过（如需强制重写请先删除该文件）');
+    process.exit(0);
+  }
+  console.log('[patch-native] 发现未定制的 MainActivity，将覆盖写入定制版本');
+}
+
+const content = String.raw`package com.hanyuestar.travelexpense;
+// TE_NATIVE_PATCHED
 
 import android.net.Uri;
+import android.net.http.SslError;
 import android.os.Bundle;
 import android.util.Log;
-import android.net.http.SslError;
 import android.webkit.CookieManager;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
+import android.widget.Toast;
+
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.cert.X509Certificate;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+
+/* 原生定制（由 scripts/patch-native.mjs 幂等注入，勿手改后再跑 sync，会被跳过）：
+ * 1. 允许第三方 Cookie（WebView 内 SPA 跨域访问自托管服务器时保证会话 Cookie 正常）；
+ * 2. 从 assets/public/index.html 解析内置服务器地址，得到可信主机白名单与 baseUrl；
+ * 3. 对可信主机放行 SSL 错误（自签名 / 证书链不完整，如 Synology NAS）；
+ * 4. web 层热更新：启动加载 files/www 已下载版本，后台拉 /api/app/manifest 比对指纹，
+ *    全量下载到 www-new 并逐文件 sha256 校验，原子替换后 setServerBasePath 热刷新。 */
 public class MainActivity extends BridgeActivity {
-  // 仅在 SSL 证书「不被系统信任」时仍继续加载的服务器主机集合。
-  //
-  // 适用场景：用户自托管服务器使用了合法但 WebView 默认不信任的证书，例如
-  // Let's Encrypt 证书的 SAN 未覆盖所用子域名（如 your-domain.example.com 签发的
-  // 证书不包含 app.your-domain.example.com），导致 APP 内请求报「证书不被信任」。
-  //
-  // 安全边界：主机集合由构建时注入的 window.TE_BUILTIN_SERVER 自动推导，绝不硬编码
-  // 任何具体域名到源码；且只对「命中本机已知服务器主机」的 SSL 错误放行，其余一律
-  // 走系统默认（取消加载），避免对任意主机盲目信任。若服务器证书可被正确签发
-  // （SAN 覆盖子域名 / 完整证书链），本逻辑不会触发，行为与系统默认一致。
-  private static final String TAG = "TE.MainActivity";
-  private final Set<String> trustedHosts = new HashSet<>();
+    private static final String TAG = "TEHotUpdate";
+    private final Set<String> trustedHosts = new HashSet<>();
+    private String serverBaseUrl = "";
+    private SSLSocketFactory trustAllFactory = null;
 
-  @Override
-  public void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    // 允许 WebView 接受跨站（第三方）Cookie：APP 页面运行在 http(s)://localhost，
-    // 而会话 Cookie 由用户自托管服务器域名种下，属跨站 Cookie。若不开启，
-    // WebView 默认拦截，导致 APP 内每次请求都「未登录」。
-    CookieManager cm = CookieManager.getInstance();
-    cm.setAcceptCookie(true);
-    if (getBridge() != null && getBridge().getWebView() != null) {
-      cm.setAcceptThirdPartyCookies(getBridge().getWebView(), true);
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        enableThirdPartyCookies();
+        loadBuiltinServer();
+        installSslErrorHandler();
+        applyDownloadedBundle();   // 第二次启动直接进上次下载的新版本
+        startHotUpdateCheck();     // 后台静默检查并热更新 web 资源
     }
-    loadTrustedHosts();
-    installSslErrorHandler();
-  }
 
-  // 从注入后的 index.html 解析内置服务器地址，提取 host 作为可信主机。
-  // 该文件位于 APK assets（构建产物），不进入公开仓库，故不会泄露个人域名。
-  private void loadTrustedHosts() {
-    try {
-      InputStream is = getAssets().open("public/index.html");
-      BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
-      StringBuilder sb = new StringBuilder();
-      String line;
-      while ((line = r.readLine()) != null) {
-        sb.append(line);
-      }
-      r.close();
-      Matcher m = Pattern.compile("TE_BUILTIN_SERVER=\\\"([^\\\"]+)\\\"").matcher(sb.toString());
-      if (m.find()) {
-        String host = new URL(m.group(1)).getHost();
-        if (host != null && !host.isEmpty()) {
-          trustedHosts.add(host.toLowerCase());
-          Log.i(TAG, "trusted SSL host loaded: " + host);
+    /* 1. 允许第三方 Cookie */
+    private void enableThirdPartyCookies() {
+        try {
+            CookieManager cm = CookieManager.getInstance();
+            cm.setAcceptCookie(true);
+            cm.setAcceptThirdPartyCookies(this.bridge.getWebView(), true);
+        } catch (Exception e) {
+            Log.e(TAG, "enableThirdPartyCookies failed", e);
         }
-      }
-    } catch (Exception e) {
-      Log.w(TAG, "loadTrustedHosts failed (no built-in server / asset missing): " + e.getMessage());
     }
-  }
 
-  // 在 Capacitor 原生的 BridgeWebViewClient 之上，仅覆写 onReceivedSslError，
-  // 保留桥接消息等全部默认行为。
-  private void installSslErrorHandler() {
-    if (getBridge() == null || getBridge().getWebView() == null) {
-      return;
-    }
-    WebView wv = getBridge().getWebView();
-    wv.setWebViewClient(new BridgeWebViewClient(getBridge()) {
-      @Override
-      public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-        String url = error.getUrl();
-        String host = (url != null) ? Uri.parse(url).getHost() : null;
-        if (host != null && trustedHosts.contains(host.toLowerCase())) {
-          Log.w(TAG, "proceeding on SSL error for trusted host: " + host + " (" + error.getPrimaryError() + ")");
-          handler.proceed();
-        } else {
-          Log.w(TAG, "SSL error for untrusted host, cancelling: " + host);
-          handler.cancel();
+    /* 2. 解析打包进 assets 的 index.html 中的内置服务器地址，填充 host 白名单与 baseUrl */
+    private void loadBuiltinServer() {
+        String html = readAssetText("public/index.html");
+        Matcher m = Pattern.compile("TE_BUILTIN_SERVER=\\\"([^\\\"]+)\\\"").matcher(html);
+        if (m.find()) {
+            try {
+                URL u = new URL(m.group(1));
+                trustedHosts.add(u.getHost().toLowerCase());
+                int port = u.getPort();
+                serverBaseUrl = u.getProtocol() + "://" + u.getHost() + (port != -1 ? ":" + port : "");
+            } catch (Exception e) {
+                Log.e(TAG, "解析内置服务器地址失败", e);
+            }
         }
-      }
-    });
-  }
+    }
+
+    private String readAssetText(String name) {
+        StringBuilder sb = new StringBuilder();
+        try (InputStream is = getAssets().open(name);
+             BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line).append('\n');
+        } catch (Exception e) {
+            Log.e(TAG, "读取 asset 失败: " + name, e);
+        }
+        return sb.toString();
+    }
+
+    /* 3. 对可信主机放行 SSL 错误（自签名 / 证书链不完整），其余主机一律取消。
+     *    必须继承 BridgeWebViewClient 而非裸 WebViewClient：父类的 shouldInterceptRequest
+     *    负责把 http://localhost 拦截到 assets / files 目录（热更新 setServerBasePath 依赖它），
+     *    裸 WebViewClient 会丢失该拦截导致白屏。通过 bridge.setWebViewClient 安装以同步内部引用。 */
+    private void installSslErrorHandler() {
+        this.bridge.setWebViewClient(new BridgeWebViewClient(this.bridge) {
+            @Override
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                String host = "";
+                try {
+                    String h = Uri.parse(error.getUrl()).getHost();
+                    if (h != null) host = h;
+                } catch (Exception ignore) { }
+                if (host != null && trustedHosts.contains(host.toLowerCase())) handler.proceed();
+                else handler.cancel();
+            }
+        });
+    }
+
+    /* ================= 4. 热更新（web 层） ================= */
+
+    private File wwwDir() { return new File(getFilesDir(), "www"); }
+    private File wwwNewDir() { return new File(getFilesDir(), "www-new"); }
+    private static File manifestIn(File dir) { return new File(dir, ".manifest.json"); }
+
+    /* 启动时若 files/www 已存在（上次下载的版本），立即切换资源根目录，避免先加载 assets 再刷新的闪烁 */
+    private void applyDownloadedBundle() {
+        try {
+            if (this.bridge == null) return;
+            File idx = new File(wwwDir(), "index.html");
+            if (idx.exists()) {
+                this.bridge.setServerBasePath(wwwDir().getAbsolutePath());
+                Log.i(TAG, "启动加载热更新版本: " + wwwDir().getAbsolutePath());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "applyDownloadedBundle failed", e);
+        }
+    }
+
+    private void startHotUpdateCheck() {
+        if (serverBaseUrl == null || serverBaseUrl.isEmpty()) {
+            Log.i(TAG, "未配置内置服务器地址，跳过热更新检查");
+            return;
+        }
+        Thread t = new Thread(new Runnable() {
+            @Override public void run() { checkUpdate(); }
+        }, "te-hotupdate");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /* 后台检查并下载更新；任何失败都保留当前可运行版本，下次启动重试 */
+    private void checkUpdate() {
+        try {
+            String manifestJson = httpGetString(serverBaseUrl + "/api/app/manifest");
+            JSONObject envelope = new JSONObject(manifestJson);
+            JSONObject remote = envelope.optJSONObject("data");
+            if (remote == null) remote = envelope; // 兼容直接返回 manifest 的情况
+            final String remoteVersion = remote.optString("version", "");
+            if (remoteVersion.isEmpty()) { Log.w(TAG, "manifest 缺少 version，跳过"); return; }
+
+            /* 与本地版本指纹比对，一致则无需更新 */
+            String localVersion = "";
+            File lm = manifestIn(wwwDir());
+            if (lm.exists()) {
+                try { localVersion = new JSONObject(readFileText(lm)).optString("version", ""); } catch (Exception ignore) { }
+            }
+            if (remoteVersion.equals(localVersion) && new File(wwwDir(), "index.html").exists()) {
+                Log.i(TAG, "web 资源已是最新版本: " + remoteVersion);
+                return;
+            }
+
+            /* 全量下载到临时目录 www-new（public 文件少、体积小，全量比增量复制更简单可靠） */
+            File newDir = wwwNewDir();
+            deleteRecursive(newDir);
+            if (!newDir.mkdirs() && !newDir.isDirectory()) { Log.e(TAG, "创建 www-new 失败"); return; }
+
+            JSONArray files = remote.getJSONArray("files");
+            for (int i = 0; i < files.length(); i++) {
+                JSONObject f = files.getJSONObject(i);
+                downloadVerifiedFile(f.getString("path"), f.getString("sha256"), newDir);
+            }
+            writeBytes(manifestIn(newDir), remote.toString().getBytes(StandardCharsets.UTF_8));
+
+            /* 原子替换：旧 www 先改名 www-old，新目录改名 www，成功后删除备份，失败回滚 */
+            File curDir = wwwDir();
+            File backup = new File(getFilesDir(), "www-old");
+            deleteRecursive(backup);
+            boolean swapped = false;
+            if (curDir.exists()) {
+                if (curDir.renameTo(backup)) {
+                    if (newDir.renameTo(curDir)) { swapped = true; deleteRecursive(backup); }
+                    else { backup.renameTo(curDir); } // 回滚
+                }
+            } else {
+                swapped = newDir.renameTo(curDir);
+            }
+            if (!swapped) { deleteRecursive(newDir); Log.e(TAG, "目录替换失败，保留当前版本"); return; }
+
+            Log.i(TAG, "web 资源已更新到版本: " + remoteVersion);
+            final String basePath = curDir.getAbsolutePath();
+            runOnUiThread(new Runnable() {
+                @Override public void run() {
+                    try {
+                        if (bridge != null) {
+                            bridge.setServerBasePath(basePath);
+                            Toast.makeText(MainActivity.this, "已更新到最新版本", Toast.LENGTH_SHORT).show();
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "热刷新失败", e);
+                    }
+                }
+            });
+        } catch (Exception e) {
+            Log.w(TAG, "热更新检查失败（保留当前版本）: " + e.getMessage());
+            deleteRecursive(wwwNewDir());
+        }
+    }
+
+    /* 下载单个文件并校验 sha256，校验不通过抛异常中止本次更新 */
+    private void downloadVerifiedFile(String rel, String expectSha, File newDir) throws Exception {
+        if (rel == null || rel.contains("..") || rel.startsWith("/") || rel.contains("\\")) {
+            throw new Exception("非法文件路径: " + rel);
+        }
+        String enc = URLEncoder.encode(rel, "UTF-8").replace("+", "%20");
+        byte[] data = httpGetBytes(serverBaseUrl + "/api/app/file?path=" + enc);
+        String actual = sha256Hex(data);
+        if (!actual.equalsIgnoreCase(expectSha)) {
+            throw new Exception("文件校验失败 " + rel);
+        }
+        File out = new File(newDir, rel);
+        File parent = out.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new Exception("无法创建目录: " + parent);
+        }
+        writeBytes(out, data);
+    }
+
+    /* ---------- HTTP（仅对可信主机放宽证书校验，HostnameVerifier 仍限定白名单） ---------- */
+    private HttpURLConnection openGet(String urlStr) throws Exception {
+        URL url = new URL(urlStr);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        if (conn instanceof HttpsURLConnection) {
+            HttpsURLConnection hs = (HttpsURLConnection) conn;
+            if (trustedHosts.contains(url.getHost().toLowerCase())) {
+                hs.setSSLSocketFactory(getTrustAllFactory());
+                hs.setHostnameVerifier(new HostnameVerifier() {
+                    @Override public boolean verify(String hostname, SSLSession session) {
+                        return hostname != null && trustedHosts.contains(hostname.toLowerCase());
+                    }
+                });
+            }
+        }
+        conn.setConnectTimeout(15000);
+        conn.setReadTimeout(40000);
+        conn.setRequestMethod("GET");
+        conn.setInstanceFollowRedirects(true);
+        conn.setRequestProperty("Accept", "*/*");
+        return conn;
+    }
+
+    private byte[] httpGetBytes(String urlStr) throws Exception {
+        HttpURLConnection conn = openGet(urlStr);
+        try {
+            int code = conn.getResponseCode();
+            InputStream is = (code >= 200 && code < 300) ? conn.getInputStream() : conn.getErrorStream();
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while (is != null && (n = is.read(buf)) != -1) bos.write(buf, 0, n);
+            if (is != null) is.close();
+            byte[] data = bos.toByteArray();
+            if (code < 200 || code >= 300) throw new Exception("HTTP " + code);
+            return data;
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    private String httpGetString(String urlStr) throws Exception {
+        return new String(httpGetBytes(urlStr), StandardCharsets.UTF_8);
+    }
+
+    private synchronized SSLSocketFactory getTrustAllFactory() throws Exception {
+        if (trustAllFactory != null) return trustAllFactory;
+        TrustManager[] tms = new TrustManager[]{ new X509TrustManager() {
+            @Override public void checkClientTrusted(X509Certificate[] chain, String authType) { }
+            @Override public void checkServerTrusted(X509Certificate[] chain, String authType) { }
+            @Override public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+        }};
+        SSLContext sc = SSLContext.getInstance("TLS");
+        sc.init(null, tms, new java.security.SecureRandom());
+        trustAllFactory = sc.getSocketFactory();
+        return trustAllFactory;
+    }
+
+    /* ---------- 文件 / 哈希工具 ---------- */
+    private static void writeBytes(File f, byte[] data) throws IOException {
+        File p = f.getParentFile();
+        if (p != null && !p.exists()) p.mkdirs();
+        try (FileOutputStream fos = new FileOutputStream(f)) { fos.write(data); }
+    }
+
+    private static String readFileText(File f) throws IOException {
+        byte[] b = new byte[(int) Math.max(f.length(), 0)];
+        try (FileInputStream fis = new FileInputStream(f)) {
+            int off = 0;
+            while (off < b.length) {
+                int r = fis.read(b, off, b.length - off);
+                if (r == -1) break;
+                off += r;
+            }
+        }
+        return new String(b, StandardCharsets.UTF_8);
+    }
+
+    private static void deleteRecursive(File f) {
+        if (f == null || !f.exists()) return;
+        if (f.isDirectory()) {
+            File[] kids = f.listFiles();
+            if (kids != null) for (File k : kids) deleteRecursive(k);
+        }
+        f.delete();
+    }
+
+    private static String sha256Hex(byte[] data) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        byte[] d = md.digest(data);
+        StringBuilder sb = new StringBuilder(d.length * 2);
+        for (byte x : d) sb.append(String.format(Locale.US, "%02x", x & 0xff));
+        return sb.toString();
+    }
 }
 `;
 
-if (!existsSync(target)) {
-  console.warn('[patch-native] 未找到 MainActivity.java，请先运行 `npm run add` 与 `npm run sync`。跳过注入。');
-  process.exit(0);
+if (!content.includes(MARKER)) {
+  console.error('[patch-native] 安全校验失败：生成内容缺少标记，中止');
+  process.exit(1);
 }
-const cur = readFileSync(target, 'utf8');
-if (cur.includes(MARKER)) {
-  console.log('[patch-native] MainActivity.java 已定制，跳过。');
-  process.exit(0);
-}
-writeFileSync(target, content);
-console.log('[patch-native] 已注入原生定制（第三方 Cookie + 按主机放行 SSL）。');
+mkdirSync(dirname(target), { recursive: true });
+writeFileSync(target, content, 'utf8');
+console.log('[patch-native] MainActivity.java 已写入（第三方Cookie + 可信主机SSL放行 + web热更新）');

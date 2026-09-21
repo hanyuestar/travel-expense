@@ -90,6 +90,10 @@ CREATE TABLE IF NOT EXISTS ai_config (
   api_base_url TEXT, api_key TEXT, model_id TEXT,
   enabled INTEGER NOT NULL DEFAULT 0,
   skip_ssl_verify INTEGER NOT NULL DEFAULT 0,
+  plan_system_prompt TEXT,
+  plan_user_prompt TEXT,
+  chat_system_prompt TEXT,
+  chat_user_prompt TEXT,
   updated_at INTEGER, updated_by INTEGER
 );
 
@@ -175,6 +179,10 @@ function initDb() {
   addColumn('routes', 'share_token', 'TEXT');
   addColumn('site_settings', 'home_currency', "TEXT NOT NULL DEFAULT 'CNY'");
   addColumn('ai_config', 'skip_ssl_verify', "INTEGER NOT NULL DEFAULT 0");
+  addColumn('ai_config', 'plan_system_prompt', 'TEXT');
+  addColumn('ai_config', 'plan_user_prompt', 'TEXT');
+  addColumn('ai_config', 'chat_system_prompt', 'TEXT');
+  addColumn('ai_config', 'chat_user_prompt', 'TEXT');
   seedSingleton();
   seedAdmin();
   seedRoutes();
@@ -354,6 +362,10 @@ function getAiConfig() {
     model_id: c.model_id || '',
     enabled: !!c.enabled,
     skip_ssl_verify: !!c.skip_ssl_verify,
+    plan_system_prompt: c.plan_system_prompt || '',
+    plan_user_prompt: c.plan_user_prompt || '',
+    chat_system_prompt: c.chat_system_prompt || '',
+    chat_user_prompt: c.chat_user_prompt || '',
     updated_at: c.updated_at || null,
     updated_by: c.updated_by || null
   };
@@ -361,13 +373,19 @@ function getAiConfig() {
 function saveAiConfig(data, adminId) {
   const cur = getAiConfig();
   const apiKey = data.api_key && data.api_key !== '******' ? String(data.api_key) : (cur.api_key || '');
-  db.prepare(`UPDATE ai_config SET api_base_url=?, api_key=?, model_id=?, enabled=?, skip_ssl_verify=?, updated_at=?, updated_by=? WHERE id=1`)
+  db.prepare(`UPDATE ai_config SET api_base_url=?, api_key=?, model_id=?, enabled=?, skip_ssl_verify=?,
+    plan_system_prompt=?, plan_user_prompt=?, chat_system_prompt=?, chat_user_prompt=?,
+    updated_at=?, updated_by=? WHERE id=1`)
     .run(
       String(data.api_base_url || '').trim(),
       apiKey,
       String(data.model_id || '').trim(),
       data.enabled ? 1 : 0,
       data.skip_ssl_verify ? 1 : 0,
+      data.plan_system_prompt === undefined ? cur.plan_system_prompt : String(data.plan_system_prompt),
+      data.plan_user_prompt === undefined ? cur.plan_user_prompt : String(data.plan_user_prompt),
+      data.chat_system_prompt === undefined ? cur.chat_system_prompt : String(data.chat_system_prompt),
+      data.chat_user_prompt === undefined ? cur.chat_user_prompt : String(data.chat_user_prompt),
       Date.now(),
       adminId
     );

@@ -223,6 +223,31 @@ async function renderAiConfig(box) {
       </div>
     </div>
     <div style="height:24px"></div>
+    <h3 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">AI 规划提示词
+      <button class="btn btn-sm btn-line" id="ai_reset_prompts" type="button">恢复默认提示词</button>
+    </h3>
+    <div class="hint" style="margin-bottom:10px">自定义提示词可获得不同风格、详略与侧重的规划结果。模板中的 <code>{占位符}</code> 会在调用时自动替换为实际内容；修改后点击上方「保存配置」生效。留空则使用内置默认。</div>
+    <div class="panel" style="padding:16px">
+      <div class="field">
+        <label>行程规划 · 系统提示词（角色设定）</label>
+        <textarea id="ai_plan_sys" rows="2" style="font-family:monospace;font-size:12px;line-height:1.5">${esc(cfg.plan_system_prompt)}</textarea>
+      </div>
+      <div class="field">
+        <label>行程规划 · 用户提示词模板
+          <span class="hint">可用占位符：{dest} 目的地、{startDate} 开始日期、{endDate} 结束日期、{days} 天数</span></label>
+        <textarea id="ai_plan_user" rows="15" style="font-family:monospace;font-size:12px;line-height:1.5">${esc(cfg.plan_user_prompt)}</textarea>
+      </div>
+      <div class="field">
+        <label>对话调整 · 系统提示词（角色设定）</label>
+        <textarea id="ai_chat_sys" rows="2" style="font-family:monospace;font-size:12px;line-height:1.5">${esc(cfg.chat_system_prompt)}</textarea>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>对话调整 · 用户提示词模板
+          <span class="hint">可用占位符：{currentScenic} 当前行程、{currentNotes} 当前备注、{message} 调整要求、{dest}、{startDate}、{endDate}、{days}</span></label>
+        <textarea id="ai_chat_user" rows="17" style="font-family:monospace;font-size:12px;line-height:1.5">${esc(cfg.chat_user_prompt)}</textarea>
+      </div>
+    </div>
+    <div style="height:24px"></div>
     <h3>启用 AI 功能的用户</h3>
     <div class="hint" style="margin-bottom:10px">勾选后，对应用户在路线编辑页面将看到「AI 规划」按钮，可一键生成行程路线。</div>
     <div class="table-wrap"><table class="tbl">
@@ -270,7 +295,7 @@ async function renderAiConfig(box) {
     }
   };
 
-  /* 保存配置 */
+  /* 保存配置（含提示词） */
   document.getElementById('ai_save').onclick = async () => {
     try {
       await api.put('/admin/ai-config', {
@@ -278,10 +303,26 @@ async function renderAiConfig(box) {
         api_key: document.getElementById('ai_api_key').value,
         model_id: document.getElementById('ai_model_id').value.trim(),
         enabled: document.getElementById('ai_enabled').checked,
-        skip_ssl_verify: document.getElementById('ai_skip_ssl').checked
+        skip_ssl_verify: document.getElementById('ai_skip_ssl').checked,
+        plan_system_prompt: document.getElementById('ai_plan_sys').value,
+        plan_user_prompt: document.getElementById('ai_plan_user').value,
+        chat_system_prompt: document.getElementById('ai_chat_sys').value,
+        chat_user_prompt: document.getElementById('ai_chat_user').value
       });
       toast('AI 配置已保存');
     } catch (e) { toast(e.message); }
+  };
+
+  /* 恢复默认提示词：用后端下发的 default_prompts 回填（仍需点保存才会持久化） */
+  document.getElementById('ai_reset_prompts').onclick = () => {
+    const d = cfg.default_prompts || {};
+    if (!d.plan_system_prompt) { toast('未获取到默认提示词'); return; }
+    if (!confirm('确定把四个提示词恢复为内置默认？恢复后需点击「保存配置」生效。')) return;
+    document.getElementById('ai_plan_sys').value = d.plan_system_prompt || '';
+    document.getElementById('ai_plan_user').value = d.plan_user_prompt || '';
+    document.getElementById('ai_chat_sys').value = d.chat_system_prompt || '';
+    document.getElementById('ai_chat_user').value = d.chat_user_prompt || '';
+    toast('已恢复为默认提示词，请点击「保存配置」');
   };
 
   /* 保存启用用户 */

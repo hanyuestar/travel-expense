@@ -12,6 +12,7 @@ const { send, fail, readBody, parseUrl } = require('./http');
 const auth = require('./auth');
 const routesApi = require('./routes_api');
 const adminApi = require('./admin_api');
+const appBundle = require('./app_bundle');
 
 let db;
 try {
@@ -182,6 +183,34 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     accessLog(req, res, startMs, 200);
     return res.end(renderSharePage(r));
+  }
+
+  /* APP 热更新（web 层）：公开 GET 接口，APP 启动时尚无登录态。
+   * /api/app/manifest 返回 web 文件指纹清单；/api/app/file?path= 下发单个文件。 */
+  if (url.pathname === '/api/app/manifest' && req.method === 'GET') {
+    try {
+      const manifest = appBundle.getManifest();
+      accessLog(req, res, startMs, 200);
+      return send(res, 200, { ok: true, data: manifest });
+    } catch (e) {
+      console.error('[app-manifest error]', e);
+      accessLog(req, res, startMs, 500);
+      return fail(res, 500, '清单生成失败');
+    }
+  }
+  if (url.pathname === '/api/app/file' && req.method === 'GET') {
+    const relPath = url.query && url.query.path ? String(url.query.path) : '';
+    const full = appBundle.resolveSafeFile(relPath);
+    if (!full) { accessLog(req, res, startMs, 404); return fail(res, 404, '文件不存在'); }
+    const ext = path.extname(full).toLowerCase();
+    const data = fs.readFileSync(full);
+    /* 热更新文件不缓存（每次都应校验指纹），保证更新即时生效 */
+    res.writeHead(200, {
+      'Content-Type': appBundle.MIME[ext] || 'application/octet-stream',
+      'Cache-Control': 'no-cache'
+    });
+    accessLog(req, res, startMs, 200);
+    return res.end(data);
   }
 
   /* API 路由 */
