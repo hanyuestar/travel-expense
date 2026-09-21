@@ -74,6 +74,14 @@
 
 ## 📌 版本变更记录
 
+### v1.1.1（2026-09-21）
+新增 **Web 热更新** + **可编辑 AI 提示词** + **AI 请求自动重试**：
+- **APP 热更新（web 层）**：安卓 APP 联网后自动拉取服务器上最新的前端文件（sha256 逐文件校验 + 原子替换），无需重装 APK 即可获得前端更新。后端新增两个公开接口 `/api/app/manifest` 与 `/api/app/file`，严格限定 `public/` 目录内（路径穿越防护已验证 12 种攻击载荷）。
+- **可编辑 AI 提示词**：管理后台 AI 配置页新增「AI 规划提示词」卡片（规划/调整各 system + user 模板），支持 `{dest}`/`{days}` 等占位符自动替换；可一键恢复内置默认（仍需保存）。数据库为空时自动回退内置默认，向后兼容。
+- **AI 请求自动重试**：针对 one-api/new-api 聚合网关间歇性 401（渠道负载均衡抖动），新增指数退避重试（最多 3 次），理论成功率从 ~75% 提升至 ~99.6%；测试连接重试 1 次。
+- **修复 BridgeWebViewClient 继承**：裸 WebViewClient 会覆盖 Capacitor 的资源拦截导致热更新白屏 → 改为继承 `BridgeWebViewClient`，保留父类全部拦截逻辑。
+- 安卓版本 1.0.5 → **1.0.6**（versionCode 106）；无新增 npm 依赖。
+
 ### v1.1.0（2026-09-20）
 新增**逐笔消费流水 + AA 分账**，并增强 AI 行程规划（向后兼容 v1.0.9 数据，启动时自动迁移，无需手工操作）：
 - **逐笔记账**：每条路线可逐笔记录消费（日期 / 类目 / 金额 / 事项 / 备注），按日期分组展示并显示当日小计，支持按 9 类筛选、点击编辑、删除。
@@ -150,7 +158,7 @@ mkdir -p /volume1/docker/travel
 cd /volume1/docker/travel
 curl -O https://raw.githubusercontent.com/hanyuestar/travel-expense/main/docker-compose.yml
 
-# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.1.0）
+# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.1.1）
 docker compose up -d
 
 # 3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
@@ -161,7 +169,7 @@ docker compose up -d
 ```yaml
 services:
   travel-expense:
-    image: ghcr.io/hanyuestar/travel-expense:v1.1.0
+    image: ghcr.io/hanyuestar/travel-expense:v1.1.1
     container_name: travel-expense
     restart: unless-stopped
     ports:
@@ -196,7 +204,7 @@ docker run -d --name travel-expense \
   -p 8108:3000 \
   -v /your/path/data:/data \
   --restart unless-stopped \
-  ghcr.io/hanyuestar/travel-expense:v1.1.0
+  ghcr.io/hanyuestar/travel-expense:v1.1.1
 ```
 
 ### 方式 C：手动运行（无 Docker，需 Node 18+）
@@ -354,7 +362,8 @@ travel-expense/
 │   ├── auth.js                        # 注册/登录/会话/封禁/改密（CSPRNG 验证码）
 │   ├── routes_api.js                  # 路线 CRUD（owner 隔离）+ 统计 + 导出导入 + 分享令牌
 │   ├── admin_api.js                   # 管理后台接口（含全站导出 / 数据库备份）
-│   ├── ai_service.js                  # AI 行程规划服务（OpenAI 兼容；测连 / 生成 / 调整；解析行程+注意事项+美食推荐）
+│   ├── app_bundle.js                  # APP 热更新支持（manifest 清单生成 + 安全文件下发）
+│   ├── ai_service.js                  # AI 行程规划服务（OpenAI 兼容；测连 / 生成 / 调整；解析行程+注意事项+美食推荐；自动重试）
 │   ├── mailer.js                      # nodemailer SMTP 发码/测试邮件
 │   ├── fx.js                          # 多币种换算（静态汇率兜底 + 可选实时源）
 │   ├── csv.js                         # 轻量 CSV 序列化（零依赖）
@@ -374,7 +383,7 @@ travel-expense/
 ├── android-app/                       # 安卓客户端工程（Capacitor 原生壳，webDir→public/）
 │   ├── capacitor.config.js            # 打包配置（appId / appName / webDir）
 │   ├── scripts/inject-server.mjs      # 构建时注入内置服务器地址（读取 .te-server-url，不入库）
-│   ├── scripts/patch-native.mjs       # 注入原生定制（第三方 Cookie 放行 + 按主机放行 SSL）
+│   ├── scripts/patch-native.mjs       # 注入原生定制（第三方 Cookie + SSL 放行 + web 热更新）
 │   ├── .te-server-url.example         # 服务器地址模板（复制为 .te-server-url 填入你的地址）
 │   └── README.md                      # 构建与「WebView 第三方 Cookie」必改项说明
 ├── tests/                             # 回归 + 冒烟测试 9 个脚本（run-all.js 一键全跑）
