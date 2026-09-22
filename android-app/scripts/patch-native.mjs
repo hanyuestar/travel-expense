@@ -80,6 +80,7 @@ public class MainActivity extends BridgeActivity {
     private static final String TAG = "TEHotUpdate";
     private final Set<String> trustedHosts = new HashSet<>();
     private String serverBaseUrl = "";
+    private String builtinServerUrl = "";
     private SSLSocketFactory trustAllFactory = null;
 
     @Override
@@ -113,6 +114,7 @@ public class MainActivity extends BridgeActivity {
                 trustedHosts.add(u.getHost().toLowerCase());
                 int port = u.getPort();
                 serverBaseUrl = u.getProtocol() + "://" + u.getHost() + (port != -1 ? ":" + port : "");
+                builtinServerUrl = m.group(1).replaceAll("/+$", "");
             } catch (Exception e) {
                 Log.e(TAG, "解析内置服务器地址失败", e);
             }
@@ -213,6 +215,11 @@ public class MainActivity extends BridgeActivity {
                 JSONObject f = files.getJSONObject(i);
                 downloadVerifiedFile(f.getString("path"), f.getString("sha256"), newDir);
             }
+            if (!reinjectBuiltinServer(newDir)) {
+                deleteRecursive(newDir);
+                Log.e(TAG, "内置服务器地址注入失败，放弃本次更新以保留当前可用版本");
+                return;
+            }
             writeBytes(manifestIn(newDir), remote.toString().getBytes(StandardCharsets.UTF_8));
 
             /* 原子替换：旧 www 先改名 www-old，新目录改名 www，成功后删除备份，失败回滚 */
@@ -267,6 +274,31 @@ public class MainActivity extends BridgeActivity {
             throw new Exception("无法创建目录: " + parent);
         }
         writeBytes(out, data);
+    }
+
+    /* 热更新会把打包时注入的内置服务器地址覆盖掉：服务器下发的 index.html 是通用自托管版，
+     * 不含 window.TE_BUILTIN_SERVER 脚本。这里在原子替换前，把解析到的 builtinServerUrl
+     * 重新写回下载目录的 index.html，保证 APK 用户始终使用内置地址、无需手填。 */
+    private boolean reinjectBuiltinServer(File dir) {
+        if (builtinServerUrl == null || builtinServerUrl.isEmpty()) return true;
+        File idx = new File(dir, "index.html");
+        if (!idx.exists()) return true;
+        try {
+            String html = readFileText(idx);
+            if (html.contains("TE_BUILTIN_SERVER=")) return true; // 已含内置地址，避免重复注入
+            String injection = "<script>window.TE_BUILTIN_SERVER=\"" + builtinServerUrl + "\";</script>";
+            int moduleIdx = html.indexOf("<script type=\"module\"");
+            if (moduleIdx == -1) {
+                html = html.replace("</head>", injection + "\n</head>");
+            } else {
+                html = html.substring(0, moduleIdx) + injection + "\n" + html.substring(moduleIdx);
+            }
+            writeBytes(idx, html.getBytes(StandardCharsets.UTF_8));
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "reinjectBuiltinServer failed", e);
+            return false;
+        }
     }
 
     /* ---------- HTTP（仅对可信主机放宽证书校验，HostnameVerifier 仍限定白名单） ---------- */
