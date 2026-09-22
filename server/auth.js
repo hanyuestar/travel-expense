@@ -30,6 +30,7 @@ function publicUser(u, aiEnabled) {
     id: u.id, username: u.username, email: u.email, role: u.role,
     status: u.status, email_verified: !!u.email_verified,
     force_reset: !!u.force_reset, created_at: u.created_at,
+    last_login: u.last_login != null ? u.last_login : null,
     ai_enabled: !!aiEnabled
   };
 }
@@ -229,6 +230,8 @@ async function handle(req, res, url, body) {
       }
       const sid = createSession(userId, req.socket.remoteAddress, req.headers['user-agent']);
       setCookie(res, sid, config.SESSION_TTL_MS);
+      /* 注册即首次活跃，写入最后登录时间（与登录口径一致，便于后台判断活跃度） */
+      db().prepare('UPDATE users SET last_login = ? WHERE id = ?').run(Date.now(), userId);
       const u = db().prepare('SELECT * FROM users WHERE id = ?').get(userId);
       return created(res, publicUser(u, false));
     }
@@ -267,10 +270,14 @@ async function handle(req, res, url, body) {
 
       const sid = createSession(user.id, ip, req.headers['user-agent']);
       setCookie(res, sid, config.SESSION_TTL_MS);
-      if (user.role === 'admin') {
-        dbModule.audit(user.id, 'admin_login', 'user', String(user.id), user.username, ip);
+      /* 记录最后登录时间（用于后台判断用户活跃度） */
+      db().prepare('UPDATE users SET last_login = ? WHERE id = ?').run(Date.now(), user.id);
+      /* 重新取一次，保证返回给前端的 last_login 与数据库一致（否则会落后一次） */
+      const u = db().prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+      if (u.role === 'admin') {
+        dbModule.audit(u.id, 'admin_login', 'user', String(u.id), u.username, ip);
       }
-      return ok(res, publicUser(user, dbModule.isAiEnabledUser(user.id)));
+      return ok(res, publicUser(u, dbModule.isAiEnabledUser(u.id)));
     }
 
     /* 登出 */

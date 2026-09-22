@@ -115,8 +115,8 @@ async function renderUsers(box) {
       <button class="btn btn-line" id="u_search">查询</button>
     </div>
     <div class="table-wrap"><table class="tbl">
-      <thead><tr><th>用户名</th><th>邮箱</th><th>角色</th><th>注册时间</th><th>在线</th><th>状态</th><th>路线数</th><th>操作</th></tr></thead>
-      <tbody id="u_body"><tr><td colspan="8" class="empty">加载中…</td></tr></tbody>
+      <thead><tr><th>用户名</th><th>邮箱</th><th>角色</th><th>注册时间</th><th>在线</th><th>状态</th><th>路线数</th><th>最后登录</th><th>操作</th></tr></thead>
+      <tbody id="u_body"><tr><td colspan="9" class="empty">加载中…</td></tr></tbody>
     </table></div>
     <div class="pager" id="u_pager"></div>`;
 
@@ -142,7 +142,7 @@ async function loadUserPage(box, filter) {
     const d = await api.get('/admin/users?' + qs.toString());
     const totalPages = Math.max(1, Math.ceil(d.total / 20));
     if (!d.list.length) {
-      body.innerHTML = '<tr><td colspan="8" class="empty">暂无用户</td></tr>';
+      body.innerHTML = '<tr><td colspan="9" class="empty">暂无用户</td></tr>';
     } else {
       body.innerHTML = d.list.map(u => `<tr>
         <td><strong>${esc(u.username || '—')}</strong>${u.id === me.id ? ' <span class="pill pill-ok">我</span>' : ''}</td>
@@ -152,6 +152,7 @@ async function loadUserPage(box, filter) {
         <td><span class="dot ${u.online ? 'on' : 'off'}"></span>${u.online ? '在线' : '离线'}</td>
         <td>${u.status === 'banned' ? '<span class="pill pill-ban">已封禁</span>' : '<span class="pill pill-ok">正常</span>'}</td>
         <td>${u.route_count}</td>
+        <td style="white-space:nowrap">${u.last_login ? fmtTime(u.last_login).slice(0, 10) : '<span style="color:#9aa">从未登录</span>'}</td>
         <td><div class="ops">
           ${u.status === 'banned'
             ? `<button class="btn btn-sm btn-line" data-act="unban" data-id="${u.id}" data-name="${esc(u.username || u.email)}">解封</button>`
@@ -172,7 +173,7 @@ async function loadUserPage(box, filter) {
     if (pv) pv.onclick = () => { if (userPage > 1) { userPage--; loadUserPage(box, filter); } };
     if (nx) nx.onclick = () => { if (userPage < totalPages) { userPage++; loadUserPage(box, filter); } };
   } catch (e) {
-    body.innerHTML = `<tr><td colspan="8" class="empty">${esc(e.message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9" class="empty">${esc(e.message)}</td></tr>`;
   }
 }
 

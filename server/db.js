@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS users (
   email_verified INTEGER NOT NULL DEFAULT 0,
   force_reset INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  last_login INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
@@ -183,6 +184,7 @@ function initDb() {
   addColumn('ai_config', 'plan_user_prompt', 'TEXT');
   addColumn('ai_config', 'chat_system_prompt', 'TEXT');
   addColumn('ai_config', 'chat_user_prompt', 'TEXT');
+  addColumn('users', 'last_login', 'INTEGER');
   seedSingleton();
   seedAdmin();
   seedRoutes();

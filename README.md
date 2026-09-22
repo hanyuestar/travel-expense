@@ -82,6 +82,12 @@
 - **修复 BridgeWebViewClient 继承**：裸 WebViewClient 会覆盖 Capacitor 的资源拦截导致热更新白屏 → 改为继承 `BridgeWebViewClient`，保留父类全部拦截逻辑。
 - 安卓版本 1.0.5 → **1.0.6**（versionCode 106）；无新增 npm 依赖。
 
+### v1.1.2（2026-09-22）
+新增**管理后台「最后登录时间」**：
+- `users` 表新增 `last_login` 列，记录每位用户最近一次登录的时间戳；老数据库启动时自动幂等补列，无需手工迁移。
+- 登录与注册成功后都会刷新该时间，便于管理员在后台判断用户活跃度、识别长期未使用账号。
+- 管理后台「用户管理」列表新增「最后登录」列，按 `YYYY-MM-DD` 展示；从未登录（旧账号或未登录场景）显示「从未登录」。
+
 ### v1.1.0（2026-09-20）
 新增**逐笔消费流水 + AA 分账**，并增强 AI 行程规划（向后兼容 v1.0.9 数据，启动时自动迁移，无需手工操作）：
 - **逐笔记账**：每条路线可逐笔记录消费（日期 / 类目 / 金额 / 事项 / 备注），按日期分组展示并显示当日小计，支持按 9 类筛选、点击编辑、删除。
@@ -158,7 +164,7 @@ mkdir -p /volume1/docker/travel
 cd /volume1/docker/travel
 curl -O https://raw.githubusercontent.com/hanyuestar/travel-expense/main/docker-compose.yml
 
-# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.1.1）
+# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.1.2）
 docker compose up -d
 
 # 3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
@@ -169,7 +175,7 @@ docker compose up -d
 ```yaml
 services:
   travel-expense:
-    image: ghcr.io/hanyuestar/travel-expense:v1.1.1
+    image: ghcr.io/hanyuestar/travel-expense:v1.1.2
     container_name: travel-expense
     restart: unless-stopped
     ports:
@@ -204,7 +210,7 @@ docker run -d --name travel-expense \
   -p 8108:3000 \
   -v /your/path/data:/data \
   --restart unless-stopped \
-  ghcr.io/hanyuestar/travel-expense:v1.1.1
+  ghcr.io/hanyuestar/travel-expense:v1.1.2
 ```
 
 ### 方式 C：手动运行（无 Docker，需 Node 18+）
@@ -222,8 +228,8 @@ node app.js            # 默认端口 3000；后端自动托管 public/ 前端�
 把网页版打包成手机原生 APP：桌面常驻图标、离线可开 UI、登录后像原生应用一样使用。APP 通过 `fetch` **直连你自托管的服务器**，数据仍全在你自己的服务器上，APP 本身不另存数据。
 
 ### 快速使用（已发布 APK）
-- **下载**：[`app-debug.apk`（v1.1.0）](https://github.com/hanyuestar/travel-expense/releases/download/v1.1.0/app-debug.apk)
-- 备用地址：<https://github.com/hanyuestar/travel-expense/releases/tag/v1.1.0>
+- **下载**：[`app-debug.apk`（v1.1.0）](https://github.com/hanyuestar/travel-expense/releases/download/v1.1.2/app-debug.apk)
+- 备用地址：<https://github.com/hanyuestar/travel-expense/releases/tag/v1.1.2>
 - 手机允许「未知来源」安装后打开即可——**服务器地址已内置，打开即用，无需填写**。
 
 > 该发布包已内置作者服务器地址；若你用自己的服务器，请按下面「自己构建」重新打包。
