@@ -357,6 +357,8 @@ travel-expense/
 │   ├── docker-image.yml               # 单镜像双注册表自动发布（amd64+arm64）
 │   ├── ci.yml                         # 测试 CI（Node 18/20/22）
 │   └── build-android.yml              # 手动触发：构建安卓 APK 并上传到指定 Release
+├── LICENSE                            # MIT License
+├── LICENSE-ADDITIONAL.md              # 附加署名条款（使用者与 Fork 须保留原作者署名）+ 第三方组件 + 免责声明
 ├── Dockerfile                         # 全栈单镜像（node 后端 + 内置前端静态）
 ├── docker-entrypoint.sh               # 容器入口（种子兜底 + 启动后端）
 ├── docker-compose.yml                 # 单服务编排（复制即可用）
@@ -422,4 +424,12 @@ travel-expense/
 
 ## 📄 版权与署名
 
-Copyright © Kyson. 本仓库为开源示例项目，仅供学习与交流使用。
+本项目由 **hanyuestar 独立设计并开发**，采用 **[MIT License](LICENSE) + [附加署名条款](LICENSE-ADDITIONAL.md)**。
+
+- **随便用、随便改、可商用，但请保留我的名字** —— 使用者与 Fork／衍生分支**必须完整保留原作者署名**，不得移除、遮盖、替换或伪造；
+- 修改后再分发请注明「基于 hanyuestar/travel-expense 修改」，且不得暗示为原作者官方版本；
+- 完整条款见 [`LICENSE`](LICENSE) 与 [`LICENSE-ADDITIONAL.md`](LICENSE-ADDITIONAL.md)（含第三方组件声明与免责声明）。
+
+**合作与联系**：hanyueppy@foxmail.com ｜ 问题反馈：[GitHub Issues](https://github.com/hanyuestar/travel-expense/issues)
+
+> ℹ️ 此前「仅供学习与交流使用」的表述已作废：本项目按 MIT 允许商业使用，唯一硬性要求是保留原作者署名。
