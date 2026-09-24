@@ -881,7 +881,7 @@ function renderOverview(r,body){
   h+=r.hotel?('<div class="detail-row"><span class="k">住宿</span></div><div class="pre-wrap">'+esc(r.hotel)+'</div>'):row("住宿","—");
   h+=row("总花费",addYen(t)+(per!=null?"（人均 "+addYen(per)+"）":""));
   if(parseFloat(r.budget_total)>0){const over=t>r.budget_total;
-    h+=row("预算","¥"+fmt(r.budget_total)+(over?' · <span style="color:var(--danger)">超支 ¥'+fmt(t-r.budget_total)+'</span>':' · 剩余 ¥'+fmt(r.budget_total-t)));}
+    h+='<div class="detail-row"><span class="k">预算</span><span class="v">¥'+fmt(r.budget_total)+(over?' · <span style="color:var(--danger)">超支 ¥'+fmt(t-r.budget_total)+'</span>':' · 剩余 ¥'+fmt(r.budget_total-t))+'</span></div>';}
   h+='<div class="detail-row"><span class="k">景点路线</span></div><div class="pre-wrap">'+(r.scenic?esc(r.scenic):"—")+'</div>';
   h+='<div style="height:10px"></div><div class="detail-row"><span class="k">9 类花费明细</span><span class="v">合计 '+addYen(t)+'</span></div>';
   const a=aggOf(r);

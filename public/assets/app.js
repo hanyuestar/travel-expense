@@ -1096,7 +1096,11 @@ function renderOverview(r, body, seedOnly) {
   h += row('总花费', fmtMoney(t, r.currency) + (per != null ? '（人均 ' + fmtMoney(per, r.currency) + '）' : ''));
   if (r.budget_total > 0) {
     const over = t > r.budget_total;
-    h += row('预算', fmtMoney(r.budget_total, r.currency) + (over ? ` · <span style="color:var(--danger)">超支 ${fmtMoney(t - r.budget_total, r.currency)}</span>` : ` · 剩余 ${fmtMoney(r.budget_total - t, r.currency)}`));
+    /* 本行含内联 HTML（超支红字）：不能用 row()——它会对值做 esc()，把标签当文本显示 */
+    h += '<div class="detail-row"><span class="k">预算</span><span class="v">' + esc(fmtMoney(r.budget_total, r.currency)) +
+      (over ? ' · <span style="color:var(--danger)">超支 ' + esc(fmtMoney(t - r.budget_total, r.currency)) + '</span>'
+            : ' · 剩余 ' + esc(fmtMoney(r.budget_total - t, r.currency))) +
+      '</span></div>';
   }
   h += '<div class="detail-row"><span class="k">景点路线</span></div><div class="pre-wrap">' + (r.scenic ? esc(r.scenic) : '—') + '</div>';
   h += '<div style="height:10px"></div><div class="detail-row"><span class="k">9 类花费明细</span><span class="v">合计 ' + fmtMoney(t, r.currency) + '</span></div>';
