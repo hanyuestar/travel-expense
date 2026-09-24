@@ -177,7 +177,7 @@ async function loadUserPage(box, filter) {
   }
 }
 
-export async function handleUserAction(btn) {
+async function handleUserAction(btn) {
   const act = btn.dataset.act;
   const id = btn.dataset.id;
   const name = btn.dataset.name;

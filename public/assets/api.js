@@ -133,10 +133,6 @@ export function renderHeader() {
 export function navigate(hash) {
   location.hash = hash;
 }
-export function currentRoute() {
-  const h = (location.hash || '#/workbench').slice(1);
-  return h || '/workbench';
-}
 /* 统一 html 转义（含单引号），charts.js / main.js 等共用此实现，避免各端转义字符集不一致 */
 export function esc(s) {
   return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

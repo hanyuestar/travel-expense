@@ -44,13 +44,13 @@ function headcount() {
 }
 
 /* ---------- 数据加载 ---------- */
-export async function loadTravelers(route) {
+async function loadTravelers(route) {
   const r = await api.get('/routes/' + encodeURIComponent(route.id) + '/travelers');
   st.travelers = (r && r.list) || [];
   return st.travelers;
 }
 
-export async function loadExpenses(route, catFilter) {
+async function loadExpenses(route, catFilter) {
   const p = new URLSearchParams();
   const cat = catFilter === undefined ? st.catFilter : catFilter;
   if (cat && cat !== '全部') p.set('category', cat);

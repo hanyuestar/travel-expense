@@ -21,7 +21,7 @@ export function loadYears() {
     });
 }
 
-export function refreshRoutes(page) {
+function refreshRoutes(page) {
   const qs = new URLSearchParams();
   if (store.hideSeed) qs.set('hideSeed', '1');
   if (state.filterYear && state.filterYear !== 'all') qs.set('year', state.filterYear);
@@ -73,8 +73,6 @@ function startMs(r) {
   const d = parseStart(r.daterange, r.year);
   return d ? d.getTime() : 0;
 }
-
-export function getRoutes() { return routes; }
 
 /* ---------- 工作台 ---------- */
 export function renderWorkbench() {
@@ -616,7 +614,7 @@ function onDateChange() {
   renderDayFields(start, end, r, { preserve: true });
 }
 
-export function openForm(id) {
+function openForm(id) {
   state.curId = id || null;
   const r = id ? routes.find(x => x.id === id) : null;
   if (id && r && r.is_seed && store.user && store.user.role !== 'admin') { toast('示例路线为系统数据，仅可查看'); return; }
@@ -711,15 +709,6 @@ function fillAiNotes(notes) {
   if (cur.includes(text)) return true;              /* 已写入过，跳过 */
   box.value = cur + '\n\n—— AI 补充 ——\n' + text;
   return true;
-}
-
-/* 回填 AI 结果到表单：行程 → 景点路线；注意事项/美食推荐 → 备注 */
-function applyAiResult(res) {
-  if (!res) return false;
-  if (res.scenic) fillScenicText(res.scenic);
-  fillAiNotes(res.notes);
-  syncAiChatBtn();
-  return !!res.scenic;
 }
 
 async function aiPlanRoute() {
@@ -1030,7 +1019,7 @@ async function deleteRoute(id) {
 }
 
 /* ---------- 详情（三页签：概览 / 流水 / 结算） ---------- */
-export function openDetail(id) {
+function openDetail(id) {
   const r = routes.find(x => x.id === id);
   if (!r) { toast('路线不存在'); return; }
   state.detailId = id;
@@ -1198,10 +1187,10 @@ export function renderProfile() {
 }
 
 /* ---------- 遮罩 ---------- */
-export function openMask(id) { document.getElementById(id).classList.add('open'); }
+function openMask(id) { document.getElementById(id).classList.add('open'); }
 /* 同一时刻只应有一个弹窗：关闭编辑弹窗时清掉「保存后回概览」的标记，
  * 避免用户取消编辑后、下一次无关保存误触发了回到详情 */
-export function closeMask(id) {
+function closeMask(id) {
   document.getElementById(id).classList.remove('open');
   if (id === 'formMask') state.editReturnDetail = null;
 }
