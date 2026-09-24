@@ -489,8 +489,11 @@ function collectDayValues() {
   };
 }
 /* 渲染按天输入框；无起止日期时退回单个自由框。
- * 优先保留用户正在输入的内容（按日期对齐），其次用 route.days，最后把历史自由文本尽力拆分预填。 */
-function renderDayFields(startDate, endDate, route) {
+ * opts.preserve=true：保留当前框里用户已输入的内容（仅「日期变化」时使用）。
+ * 默认 false：一律以 route.day_plans 为准 —— 打开路线时必须走这条，
+ *            否则会残留上一条路线的框值、导致新路线内容显示为空（曾出现的 bug）。 */
+function renderDayFields(startDate, endDate, route, opts) {
+  const preserve = !!(opts && opts.preserve);
   const dates = dateRangeList(startDate, endDate);
   const scenicFree = document.getElementById('f_scenic');
   const hotelFree = document.getElementById('f_hotel');
@@ -498,9 +501,15 @@ function renderDayFields(startDate, endDate, route) {
   const hotelList = document.getElementById('dayHotelList');
   if (!scenicList || !hotelList) return;
 
+  /* 打开路线（非保留）时先清空按天容器，杜绝上一条路线的数据串入 */
+  if (!preserve) {
+    scenicList.style.display = 'none'; scenicList.innerHTML = '';
+    hotelList.style.display = 'none'; hotelList.innerHTML = '';
+  }
+
   if (!dates.length) {
-    /* 从按天切回自由框：把已有按天内容合并回自由框，避免丢失 */
-    if (scenicList.style.display !== 'none') {
+    /* 从按天切回自由框（用户清空了日期）：把已有按天内容合并回自由框，避免丢失 */
+    if (preserve && scenicList.style.display !== 'none') {
       const p = collectDayValues();
       if (p && scenicFree && !scenicFree.value.trim()) scenicFree.value = p.scenic.filter(Boolean).join('\n');
       if (p && hotelFree && !hotelFree.value.trim()) hotelFree.value = p.hotel.filter(Boolean).join('\n');
@@ -511,13 +520,21 @@ function renderDayFields(startDate, endDate, route) {
     return;
   }
   /* 有日期 → 按天模式 */
-  const prev = collectDayValues();
   let scenicVals = null, hotelVals = null;
-  if (prev) {
-    const byDate = {};
-    prev.dates.forEach((d, i) => { byDate[d] = { scenic: prev.scenic[i], hotel: prev.hotel[i] }; });
-    scenicVals = dates.map(d => (byDate[d] ? byDate[d].scenic : ''));
-    hotelVals = dates.map(d => (byDate[d] ? byDate[d].hotel : ''));
+  if (preserve) {
+    const prev = collectDayValues();
+    if (prev) {
+      const byDate = {};
+      prev.dates.forEach((d, i) => { byDate[d] = { scenic: prev.scenic[i], hotel: prev.hotel[i] }; });
+      scenicVals = dates.map(d => (byDate[d] ? byDate[d].scenic : ''));
+      hotelVals = dates.map(d => (byDate[d] ? byDate[d].hotel : ''));
+    } else {
+      /* 自由框 → 按天（用户刚填了起止日期）：把自由框文本按天拆分预填 */
+      const fs = (scenicFree && scenicFree.value) || '';
+      const fh = (hotelFree && hotelFree.value) || '';
+      scenicVals = splitTextToDays(fs, dates) || [fs].concat(dates.slice(1).map(() => ''));
+      hotelVals = splitTextToDays(fh, dates) || [fh].concat(dates.slice(1).map(() => ''));
+    }
   }
   if (!scenicVals) {
     const src = (route && Array.isArray(route.day_plans) && route.day_plans.length) ? route.day_plans : null;
@@ -595,7 +612,8 @@ function onDateChange() {
   document.getElementById('f_days').value = days > 0 ? days : '';
   document.getElementById('f_daterange').value = buildDateRangeText(start, end);
   const r = state.curId ? routes.find(x => x.id === state.curId) : null;
-  renderDayFields(start, end, r);
+  /* 日期变化：保留用户已输入的内容（按日期对齐），而非重新用路线数据覆盖 */
+  renderDayFields(start, end, r, { preserve: true });
 }
 
 export function openForm(id) {

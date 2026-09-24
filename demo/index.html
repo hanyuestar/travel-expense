@@ -724,22 +724,32 @@ function demoCollectDayValues(){
   const hEls=hl?Array.from(hl.querySelectorAll(".day-item")):[];
   return {dates:sEls.map(e=>e.dataset.date),scenic:sEls.map(e=>{const t=e.querySelector("textarea");return t?t.value:"";}),hotel:sEls.map((e,i)=>{const t=hEls[i]&&hEls[i].querySelector("textarea");return t?t.value:"";})};
 }
-function demoRenderDayFields(route){
+function demoRenderDayFields(route,opts){
+  const preserve=!!(opts&&opts.preserve);
   const dates=demoDateRange();
   const sf=document.getElementById("f_scenic"),hf=document.getElementById("f_hotel");
   const sl=document.getElementById("dayScenicList"),hl=document.getElementById("dayHotelList");
   if(!sl||!hl)return;
+  /* 打开路线（非保留）时先清空按天容器，避免上一条路线的数据串入 */
+  if(!preserve){sl.style.display="none";sl.innerHTML="";hl.style.display="none";hl.innerHTML="";}
   if(!dates.length){
-    if(sl.style.display!=="none"){const p=demoCollectDayValues();
+    if(preserve&&sl.style.display!=="none"){const p=demoCollectDayValues();
       if(p&&sf&&!sf.value.trim())sf.value=p.scenic.filter(Boolean).join("\n");
       if(p&&hf&&!hf.value.trim())hf.value=p.hotel.filter(Boolean).join("\n");}
     sl.style.display="none";hl.style.display="none";
     if(sf)sf.style.display="";if(hf)hf.style.display="";
     return;
   }
-  const prev=demoCollectDayValues();
   let sv=null,hv=null;
-  if(prev&&prev.dates.length===dates.length){sv=prev.scenic;hv=prev.hotel;}
+  if(preserve){
+    const prev=demoCollectDayValues();
+    if(prev&&prev.dates.length===dates.length){sv=prev.scenic;hv=prev.hotel;}
+    else if(!prev){
+      const fs=(sf&&sf.value)||"",fh=(hf&&hf.value)||"";
+      sv=splitTextToDays(fs,dates)||[fs].concat(dates.slice(1).map(()=>""));
+      hv=splitTextToDays(fh,dates)||[fh].concat(dates.slice(1).map(()=>""));
+    }
+  }
   if(!sv){
     const src=(route&&Array.isArray(route.day_plans)&&route.day_plans.length)?route.day_plans:null;
     const hist=route?{scenic:route.scenic||"",hotel:route.hotel||""}:{scenic:"",hotel:""};
@@ -788,7 +798,8 @@ function openForm(id){
   document.getElementById("f_notes").value=r?(r.notes||""):"";
   /* 行程按天：按出行日期/天数生成；历史文本尽力拆分预填 */
   demoRenderDayFields(r);
-  const rerender=()=>demoRenderDayFields(r);
+  /* 日期变化时保留用户已输入内容 */
+  const rerender=()=>demoRenderDayFields(r,{preserve:true});
   const de=document.getElementById("f_days");if(de)de.onchange=rerender;
   const dre=document.getElementById("f_daterange");if(dre)dre.onchange=rerender;
   /* 花费明细统一由流水派生 */
