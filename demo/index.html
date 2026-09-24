@@ -135,6 +135,11 @@
   .field .hint{font-size:11px;color:var(--muted);font-weight:400}
   .exp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   @media(min-width:480px){.exp-grid{grid-template-columns:1fr 1fr 1fr}}
+  .day-list{display:flex;flex-direction:column;gap:10px}
+  .day-item{border:1px solid var(--line);border-radius:10px;padding:10px 10px 2px;background:#fafdfc}
+  .day-item .day-head{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .day-item .day-badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:var(--primary-l);color:var(--primary);font-size:11px}
+  .day-item textarea{min-height:52px}
   .exp-cell{border:1px solid var(--line);border-radius:12px;padding:9px 11px;background:#fafdfc}
   .exp-cell .el{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:5px}
   .exp-cell .el .sw{width:10px;height:10px;border-radius:3px}
@@ -334,8 +339,16 @@
       <div class="field"><label>同行人数 <span class="hint">用于算人均</span></label><input id="f_people" placeholder="2" inputmode="numeric"></div>
       <div class="field"><label>主要目的地</label><input id="f_dest" placeholder="青海、甘肃"></div>
     </div>
-    <div class="field"><label>景点路线</label><textarea id="f_scenic" placeholder="按天记录：Day1 西宁-祁连…；Day2 张掖…"></textarea></div>
-    <div class="field"><label>住宿位置</label><textarea id="f_hotel" placeholder="如家武林广场店、迪堡酒店…"></textarea></div>
+    <div class="field">
+      <label>景点路线</label>
+      <div id="dayScenicList" class="day-list" style="display:none"></div>
+      <textarea id="f_scenic" placeholder="按天记录：Day1 西宁-祁连…；Day2 张掖…"></textarea>
+    </div>
+    <div class="field">
+      <label>住宿位置 <span class="hint">按天填写每天住在哪</span></label>
+      <div id="dayHotelList" class="day-list" style="display:none"></div>
+      <textarea id="f_hotel" placeholder="如家武林广场店、迪堡酒店…"></textarea>
+    </div>
     <div class="field">
       <label>花费明细 <span class="hint">由逐笔流水自动汇总，无需手工填写</span></label>
       <div class="banner" id="expLedgerHint" style="margin:0">
@@ -658,6 +671,105 @@ function yearTable(ys){
   return h;
 }
 
+/* ---------- 行程按天（景点路线 / 住宿） ---------- */
+const WEEK_CN=["周日","周一","周二","周三","周四","周五","周六"];
+function isoLabel(iso){const m=String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return "";const d=new Date(iso+"T00:00:00");return parseInt(m[2],10)+"月"+parseInt(m[3],10)+"日"+(isNaN(d.getTime())?"":" "+WEEK_CN[d.getDay()]);}
+/* 由「出行日期」文本 + 年份解析出每天日期；解析不出则按「天数」生成占位（date=''） */
+function demoDateRange(){
+  const year=document.getElementById("f_year").value.trim()||String(new Date().getFullYear());
+  const dr=document.getElementById("f_daterange").value.trim();
+  const n=parseInt(document.getElementById("f_days").value)||0;
+  let m=dr.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})\s*[-—~]\s*(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  let s=null,e=null;
+  if(m){s=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));e=new Date(Date.UTC(+m[4],+m[5]-1,+m[6]));}
+  else{m=dr.match(/(\d{1,2})[\/\-.](\d{1,2})\s*[-—~]\s*(\d{1,2})[\/\-.](\d{1,2})/);
+    if(m){const sm=+m[1],em=+m[3];const ey=em<sm?(+year+1):+year;s=new Date(Date.UTC(+year,sm-1,+m[2]));e=new Date(Date.UTC(ey,em-1,+m[4]));}}
+  if(s&&e&&!isNaN(s.getTime())&&!isNaN(e.getTime())&&e>=s){const out=[];for(let t=s.getTime();t<=e.getTime();t+=86400000)out.push(new Date(t).toISOString().slice(0,10));return out;}
+  if(n>0){const a=[];for(let i=0;i<n;i++)a.push("");return a;}
+  return [];
+}
+/* 尽力把历史自由文本拆成按天数组（零丢失），与多用户版同规则 */
+function splitTextToDays(text,dates){
+  const raw=String(text==null?"":text);
+  if(!raw.trim()||!dates||!dates.length)return null;
+  const mdKey=(str)=>{const m=String(str).match(/(\d{4})-(\d{2})-(\d{2})/);return m?(+m[2])+"/"+(+m[3]):"";};
+  const detect=(line)=>{
+    let m=line.match(/^\s*Day\s*(\d+)\s*[:：.\-、]?\s*/i);if(m)return{idx:+m[1]-1,rest:line.slice(m[0].length)};
+    m=line.match(/^\s*第\s*(\d+)\s*天\s*[:：.\-、]?\s*/);if(m)return{idx:+m[1]-1,rest:line.slice(m[0].length)};
+    m=line.match(/^\s*(\d{1,2})\s*[、.)]\s*/);if(m&&+m[1]<=60)return{idx:+m[1]-1,rest:line.slice(m[0].length)};
+    m=line.match(/^\s*(?:(\d{4})\s*[年\/\-.]\s*)?(\d{1,2})\s*[月\/\-.]\s*(\d{1,2})\s*日?\s*[:：.\-、]?\s*/);
+    if(m){const key=(+m[2])+"/"+(+m[3]);const hit=dates.findIndex(d=>mdKey(d)===key);return{idx:hit,rest:line.slice(m[0].length)};}
+    return null;
+  };
+  const lines=raw.split(/\r?\n/);const blocks=[];let cur=null,sawHeader=false;
+  for(const line of lines){const h=detect(line);if(h){sawHeader=true;cur={idx:h.idx,lines:[]};if(h.rest.trim())cur.lines.push(h.rest);blocks.push(cur);}else if(cur)cur.lines.push(line);else{cur={idx:null,lines:[line]};blocks.push(cur);}}
+  const slots=dates.map(()=>[]);const extra=[];
+  if(!sawHeader){
+    let parts=raw.split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
+    if(parts.length!==dates.length){const ls=raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);if(ls.length===dates.length)parts=ls;else return null;}
+    parts.forEach((p,i)=>slots[i].push(p));
+  }else{
+    const pending=[];
+    for(const b of blocks){const body=b.lines.join("\n").replace(/^\n+|\n+$/g,"").trim();if(!body)continue;
+      if(b.idx!=null&&b.idx>=0&&b.idx<dates.length)slots[b.idx].push(body);else if(b.idx!=null&&b.idx>=dates.length)extra.push(body);else pending.push(body);}
+    let k=0;for(const body of pending){while(k<slots.length&&slots[k].length)k++;if(k<slots.length)slots[k].push(body);else extra.push(body);}
+  }
+  if(extra.length)slots[slots.length-1].push(extra.join("\n"));
+  return slots.map(a=>a.join("\n"));
+}
+function demoCollectDayValues(){
+  const sl=document.getElementById("dayScenicList"),hl=document.getElementById("dayHotelList");
+  if(!sl||sl.style.display==="none")return null;
+  const sEls=Array.from(sl.querySelectorAll(".day-item"));
+  const hEls=hl?Array.from(hl.querySelectorAll(".day-item")):[];
+  return {dates:sEls.map(e=>e.dataset.date),scenic:sEls.map(e=>{const t=e.querySelector("textarea");return t?t.value:"";}),hotel:sEls.map((e,i)=>{const t=hEls[i]&&hEls[i].querySelector("textarea");return t?t.value:"";})};
+}
+function demoRenderDayFields(route){
+  const dates=demoDateRange();
+  const sf=document.getElementById("f_scenic"),hf=document.getElementById("f_hotel");
+  const sl=document.getElementById("dayScenicList"),hl=document.getElementById("dayHotelList");
+  if(!sl||!hl)return;
+  if(!dates.length){
+    if(sl.style.display!=="none"){const p=demoCollectDayValues();
+      if(p&&sf&&!sf.value.trim())sf.value=p.scenic.filter(Boolean).join("\n");
+      if(p&&hf&&!hf.value.trim())hf.value=p.hotel.filter(Boolean).join("\n");}
+    sl.style.display="none";hl.style.display="none";
+    if(sf)sf.style.display="";if(hf)hf.style.display="";
+    return;
+  }
+  const prev=demoCollectDayValues();
+  let sv=null,hv=null;
+  if(prev&&prev.dates.length===dates.length){sv=prev.scenic;hv=prev.hotel;}
+  if(!sv){
+    const src=(route&&Array.isArray(route.day_plans)&&route.day_plans.length)?route.day_plans:null;
+    const hist=route?{scenic:route.scenic||"",hotel:route.hotel||""}:{scenic:"",hotel:""};
+    if(src&&src.length===1&&!src[0].date){
+      const ss=splitTextToDays(src[0].scenic,dates),hh=splitTextToDays(src[0].hotel,dates);
+      sv=ss||[src[0].scenic||""].concat(dates.slice(1).map(()=>""));
+      hv=hh||[src[0].hotel||""].concat(dates.slice(1).map(()=>""));
+    }else if(src){
+      sv=dates.map((d,i)=>{const hit=src.find(x=>x.date===d)||src[i];return (hit&&hit.scenic)||"";});
+      hv=dates.map((d,i)=>{const hit=src.find(x=>x.date===d)||src[i];return (hit&&hit.hotel)||"";});
+    }else{
+      /* demo 老数据（无 day_plans）：直接用 scenic/hotel 文本尽力拆分 */
+      const ss=splitTextToDays(hist.scenic,dates),hh=splitTextToDays(hist.hotel,dates);
+      sv=ss||[hist.scenic].concat(dates.slice(1).map(()=>""));
+      hv=hh||[hist.hotel].concat(dates.slice(1).map(()=>""));
+    }
+  }
+  sl.style.display="";hl.style.display="";
+  if(sf){sf.style.display="none";sf.value="";}
+  if(hf){hf.style.display="none";hf.value="";}
+  const head=(d,i)=>"<div class=\"day-head\"><span class=\"day-badge\">D"+(i+1)+"</span><span>"+(isoLabel(d)||("第 "+(i+1)+" 天"))+"</span></div>";
+  sl.innerHTML=dates.map((d,i)=>"<div class=\"day-item\" data-date=\""+d+"\">"+head(d,i)+"<textarea class=\"day-scenic\" placeholder=\"第 "+(i+1)+" 天行程安排…\">"+esc(sv[i]||"")+"</textarea></div>").join("");
+  hl.innerHTML=dates.map((d,i)=>"<div class=\"day-item\" data-date=\""+d+"\">"+head(d,i)+"<textarea class=\"day-hotel\" placeholder=\"第 "+(i+1)+" 天住在哪…\">"+esc(hv[i]||"")+"</textarea></div>").join("");
+}
+function demoCollectDays(){
+  const v=demoCollectDayValues();
+  if(!v){const s=(document.getElementById("f_scenic")||{}).value||"";const h=(document.getElementById("f_hotel")||{}).value||"";return (s.trim()||h.trim())?[{date:"",scenic:s,hotel:h}]:[];}
+  return v.dates.map((d,i)=>({date:d,scenic:v.scenic[i]||"",hotel:v.hotel[i]||""}));
+}
+
 /* ---------- form ---------- */
 function openForm(id){
   state.curId=id||null;
@@ -674,6 +786,11 @@ function openForm(id){
   document.getElementById("f_scenic").value=r?(r.scenic||""):"";
   document.getElementById("f_hotel").value=r?(r.hotel||""):"";
   document.getElementById("f_notes").value=r?(r.notes||""):"";
+  /* 行程按天：按出行日期/天数生成；历史文本尽力拆分预填 */
+  demoRenderDayFields(r);
+  const rerender=()=>demoRenderDayFields(r);
+  const de=document.getElementById("f_days");if(de)de.onchange=rerender;
+  const dre=document.getElementById("f_daterange");if(dre)dre.onchange=rerender;
   /* 花费明细统一由流水派生 */
   const hint=document.getElementById("expLedgerHintText");
   if(hint)hint.textContent=r?("9 类花费由逐笔流水自动汇总（当前 "+(r.expenses||[]).length+" 笔），本表单不再手工填写。"):
@@ -687,10 +804,13 @@ async function saveForm(){
   const name=document.getElementById("f_name").value.trim();
   if(!name){toast("请填写路线名称");return;}
   /* 不再提交 exp：9 类花费统一由流水汇总 */
+  /* 行程按天：提交 day_plans（字段名不能叫 days，那是「天数」），并回写 scenic/hotel 镜像 */
+  const dayPlans=demoCollectDays();
+  const mirror=(k)=>dayPlans.filter(x=>x[k]&&x[k].trim()).map(x=>{const l=isoLabel(x.date);return (l?"【"+l.split(" ")[0]+"】":"")+x[k];}).join("\n");
   const obj={name:name,year:document.getElementById("f_year").value.trim(),daterange:document.getElementById("f_daterange").value.trim(),
     type:document.getElementById("f_type").value,days:parseInt(document.getElementById("f_days").value)||0,
     people:parseInt(document.getElementById("f_people").value)||0,dest:document.getElementById("f_dest").value.trim(),
-    scenic:document.getElementById("f_scenic").value,hotel:document.getElementById("f_hotel").value,
+    day_plans:dayPlans,scenic:mirror("scenic"),hotel:mirror("hotel"),
     notes:document.getElementById("f_notes").value};
   setSync("保存中…");
   try{
@@ -758,7 +878,7 @@ function renderOverview(r,body){
   h+=row("年份 / 类型",(r.year||"")+" · "+(r.type||""));
   h+=row("出行日期",(r.daterange||"")+(r.days?"（"+r.days+"天）":""));
   h+=row("目的地",r.dest||"—");
-  h+=row("住宿",r.hotel||"—");
+  h+=r.hotel?('<div class="detail-row"><span class="k">住宿</span></div><div class="pre-wrap">'+esc(r.hotel)+'</div>'):row("住宿","—");
   h+=row("总花费",addYen(t)+(per!=null?"（人均 "+addYen(per)+"）":""));
   if(parseFloat(r.budget_total)>0){const over=t>r.budget_total;
     h+=row("预算","¥"+fmt(r.budget_total)+(over?' · <span style="color:var(--danger)">超支 ¥'+fmt(t-r.budget_total)+'</span>':' · 剩余 ¥'+fmt(r.budget_total-t)));}

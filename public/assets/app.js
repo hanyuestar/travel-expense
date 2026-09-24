@@ -396,14 +396,206 @@ function buildDateRangeText(start, end) {
   return fmt(start || end);
 }
 
+/* ---------- 行程按天（景点路线 / 住宿） ---------- */
+const WEEK_CN = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+/* ISO 日期 → 「9月21日 周日」；非法返回 '' */
+function isoLabel(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  const d = new Date(iso + 'T00:00:00');
+  return `${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日` + (isNaN(d.getTime()) ? '' : ' ' + WEEK_CN[d.getDay()]);
+}
+/* 起止日期之间的 ISO 日期数组（含首尾） */
+function dateRangeList(start, end) {
+  const out = [];
+  if (!start || !end) return out;
+  /* 用 UTC 解析 + 迭代，避免 toISOString()（UTC）把本地日期回退一天 */
+  const s = new Date(start + 'T00:00:00Z'), e = new Date(end + 'T00:00:00Z');
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return out;
+  for (let t = s.getTime(); t <= e.getTime(); t += 86400000) out.push(new Date(t).toISOString().slice(0, 10));
+  return out;
+}
+/* 尽力把历史自由文本拆成「按天」数组（零丢失）。
+ * 识别行首 Day N / 第N天 / 1. / 日期(9/21、9月21日)→ 命中路线日期则归该天；
+ * 无法定位的段落按顺序填入空天；多余内容并入最后一天，绝不丢弃。
+ * 完全无标记时：按空行分段，段数=天数才一一对应，否则返回 null（保留整体）。 */
+function splitTextToDays(text, dates) {
+  const raw = String(text == null ? '' : text);
+  if (!raw.trim() || !dates || !dates.length) return null;
+  const mdKey = (str) => { const m = String(str).match(/(\d{4})-(\d{2})-(\d{2})/); return m ? (+m[2]) + '/' + (+m[3]) : ''; };
+  const detect = (line) => {
+    let m = line.match(/^\s*Day\s*(\d+)\s*[:：.\-、]?\s*/i);
+    if (m) return { idx: +m[1] - 1, rest: line.slice(m[0].length) };
+    m = line.match(/^\s*第\s*(\d+)\s*天\s*[:：.\-、]?\s*/);
+    if (m) return { idx: +m[1] - 1, rest: line.slice(m[0].length) };
+    m = line.match(/^\s*(\d{1,2})\s*[、.)]\s*/);
+    if (m && +m[1] <= 60) return { idx: +m[1] - 1, rest: line.slice(m[0].length) };
+    m = line.match(/^\s*(?:(\d{4})\s*[年\/\-.]\s*)?(\d{1,2})\s*[月\/\-.]\s*(\d{1,2})\s*日?\s*[:：.\-、]?\s*/);
+    if (m) {
+      const key = (+m[2]) + '/' + (+m[3]);
+      const hit = dates.findIndex(d => mdKey(d) === key);
+      return { idx: hit, rest: line.slice(m[0].length) };
+    }
+    return null;
+  };
+  const lines = raw.split(/\r?\n/);
+  const blocks = [];
+  let cur = null, sawHeader = false;
+  for (const line of lines) {
+    const h = detect(line);
+    if (h) { sawHeader = true; cur = { idx: h.idx, lines: [] }; if (h.rest.trim()) cur.lines.push(h.rest); blocks.push(cur); }
+    else if (cur) cur.lines.push(line);
+    else { cur = { idx: null, lines: [line] }; blocks.push(cur); }
+  }
+  const slots = dates.map(() => []);
+  const extra = [];
+  if (!sawHeader) {
+    /* 无标记：优先「空行分段数=天数」；否则「非空行数=天数」按行分配（住宿常见一行一天）；都不满足则放弃拆分 */
+    let parts = raw.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+    if (parts.length !== dates.length) {
+      const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      if (lines.length === dates.length) parts = lines; else return null;
+    }
+    parts.forEach((p, i) => slots[i].push(p));
+  } else {
+    const pending = [];
+    for (const b of blocks) {
+      const body = b.lines.join('\n').replace(/^\n+|\n+$/g, '').trim();
+      if (!body) continue;
+      if (b.idx != null && b.idx >= 0 && b.idx < dates.length) slots[b.idx].push(body);
+      else if (b.idx != null && b.idx >= dates.length) extra.push(body);
+      else pending.push(body);
+    }
+    let k = 0;
+    for (const body of pending) {
+      while (k < slots.length && slots[k].length) k++;
+      if (k < slots.length) slots[k].push(body); else extra.push(body);
+    }
+  }
+  if (extra.length) slots[slots.length - 1].push(extra.join('\n'));
+  return slots.map(a => a.join('\n'));
+}
+/* 读取当前按天框的值（未处于按天模式返回 null） */
+function collectDayValues() {
+  const scenicList = document.getElementById('dayScenicList');
+  const hotelList = document.getElementById('dayHotelList');
+  if (!scenicList || scenicList.style.display === 'none') return null;
+  const sEls = Array.from(scenicList.querySelectorAll('.day-item'));
+  const hEls = hotelList ? Array.from(hotelList.querySelectorAll('.day-item')) : [];
+  return {
+    dates: sEls.map(el => el.dataset.date),
+    scenic: sEls.map(el => { const t = el.querySelector('textarea'); return t ? t.value : ''; }),
+    hotel: sEls.map((el, i) => { const t = hEls[i] && hEls[i].querySelector('textarea'); return t ? t.value : ''; })
+  };
+}
+/* 渲染按天输入框；无起止日期时退回单个自由框。
+ * 优先保留用户正在输入的内容（按日期对齐），其次用 route.days，最后把历史自由文本尽力拆分预填。 */
+function renderDayFields(startDate, endDate, route) {
+  const dates = dateRangeList(startDate, endDate);
+  const scenicFree = document.getElementById('f_scenic');
+  const hotelFree = document.getElementById('f_hotel');
+  const scenicList = document.getElementById('dayScenicList');
+  const hotelList = document.getElementById('dayHotelList');
+  if (!scenicList || !hotelList) return;
+
+  if (!dates.length) {
+    /* 从按天切回自由框：把已有按天内容合并回自由框，避免丢失 */
+    if (scenicList.style.display !== 'none') {
+      const p = collectDayValues();
+      if (p && scenicFree && !scenicFree.value.trim()) scenicFree.value = p.scenic.filter(Boolean).join('\n');
+      if (p && hotelFree && !hotelFree.value.trim()) hotelFree.value = p.hotel.filter(Boolean).join('\n');
+    }
+    scenicList.style.display = 'none'; hotelList.style.display = 'none';
+    if (scenicFree) scenicFree.style.display = '';
+    if (hotelFree) hotelFree.style.display = '';
+    return;
+  }
+  /* 有日期 → 按天模式 */
+  const prev = collectDayValues();
+  let scenicVals = null, hotelVals = null;
+  if (prev) {
+    const byDate = {};
+    prev.dates.forEach((d, i) => { byDate[d] = { scenic: prev.scenic[i], hotel: prev.hotel[i] }; });
+    scenicVals = dates.map(d => (byDate[d] ? byDate[d].scenic : ''));
+    hotelVals = dates.map(d => (byDate[d] ? byDate[d].hotel : ''));
+  }
+  if (!scenicVals) {
+    const src = (route && Array.isArray(route.day_plans) && route.day_plans.length) ? route.day_plans : null;
+    if (src && src.length === 1 && !src[0].date) {
+      /* 历史「未分天」单条：尽力拆分预填 */
+      const ss = splitTextToDays(src[0].scenic, dates);
+      const hh = splitTextToDays(src[0].hotel, dates);
+      scenicVals = ss || [src[0].scenic || ''].concat(dates.slice(1).map(() => ''));
+      hotelVals = hh || [src[0].hotel || ''].concat(dates.slice(1).map(() => ''));
+    } else if (src) {
+      scenicVals = dates.map((d, i) => { const hit = src.find(x => x.date === d) || src[i]; return (hit && hit.scenic) || ''; });
+      hotelVals = dates.map((d, i) => { const hit = src.find(x => x.date === d) || src[i]; return (hit && hit.hotel) || ''; });
+    } else {
+      /* 兜底（无 day_plans）：直接用 scenic/hotel 文本尽力拆分，避免历史内容丢失 */
+      const hist = route ? { scenic: route.scenic || '', hotel: route.hotel || '' } : { scenic: '', hotel: '' };
+      const ss = splitTextToDays(hist.scenic, dates);
+      const hh = splitTextToDays(hist.hotel, dates);
+      scenicVals = ss || [hist.scenic].concat(dates.slice(1).map(() => ''));
+      hotelVals = hh || [hist.hotel].concat(dates.slice(1).map(() => ''));
+    }
+  }
+  scenicList.style.display = ''; hotelList.style.display = '';
+  if (scenicFree) { scenicFree.style.display = 'none'; scenicFree.value = ''; }
+  if (hotelFree) { hotelFree.style.display = 'none'; hotelFree.value = ''; }
+  scenicList.innerHTML = dates.map((d, i) => `<div class="day-item" data-date="${d}">
+      <div class="day-head"><span class="day-badge">D${i + 1}</span><span>${isoLabel(d) || d}</span></div>
+      <textarea class="day-scenic" placeholder="第 ${i + 1} 天行程安排…">${esc(scenicVals[i] || '')}</textarea>
+    </div>`).join('');
+  hotelList.innerHTML = dates.map((d, i) => `<div class="day-item" data-date="${d}">
+      <div class="day-head"><span class="day-badge">D${i + 1}</span><span>${isoLabel(d) || d}</span></div>
+      <textarea class="day-hotel" placeholder="第 ${i + 1} 天住在哪…">${esc(hotelVals[i] || '')}</textarea>
+    </div>`).join('');
+  scenicList.querySelectorAll('textarea').forEach(t => t.addEventListener('input', syncAiChatBtn));
+}
+/* 收集表单行程 → days 数组（无按天时退化为单条「未分天」） */
+function collectDays() {
+  const v = collectDayValues();
+  if (!v) {
+    const scenic = (document.getElementById('f_scenic') || {}).value || '';
+    const hotel = (document.getElementById('f_hotel') || {}).value || '';
+    return (scenic.trim() || hotel.trim()) ? [{ date: '', scenic, hotel }] : [];
+  }
+  return v.dates.map((d, i) => ({ date: d, scenic: v.scenic[i] || '', hotel: v.hotel[i] || '' }));
+}
+/* 当前表单的行程文本（按天模式拼接各天并加日期标签），供 AI 读取 */
+function currentScenicText() {
+  const v = collectDayValues();
+  if (v) {
+    return v.dates.map((d, i) => {
+      const t = (v.scenic[i] || '').trim();
+      if (!t) return '';
+      const lab = (isoLabel(d) || '').split(' ')[0];
+      return (lab ? '【' + lab + '】' : '') + t;
+    }).filter(Boolean).join('\n');
+  }
+  const el = document.getElementById('f_scenic');
+  return el ? el.value.trim() : '';
+}
+/* 把行程文本写回表单：按天模式按规则拆分；无法结构化则整体放第 1 天 */
+function fillScenicText(text) {
+  const v = collectDayValues();
+  if (!v) { const el = document.getElementById('f_scenic'); if (el) el.value = text; syncAiChatBtn(); return; }
+  const slots = splitTextToDays(text, v.dates) || [text].concat(v.dates.slice(1).map(() => ''));
+  const tas = document.querySelectorAll('#dayScenicList .day-scenic');
+  tas.forEach((ta, i) => { ta.value = slots[i] || ''; });
+  syncAiChatBtn();
+}
+
 /* ---------- 表单 ---------- */
-/* 日期变化时自动计算天数并更新 daterange 隐藏字段 */
+/* 日期变化时自动计算天数并更新 daterange 隐藏字段，并按天重建行程框 */
 function onDateChange() {
   const start = document.getElementById('f_start_date').value;
   const end = document.getElementById('f_end_date').value;
   const days = calcDays(start, end);
   document.getElementById('f_days').value = days > 0 ? days : '';
   document.getElementById('f_daterange').value = buildDateRangeText(start, end);
+  const r = state.curId ? routes.find(x => x.id === state.curId) : null;
+  renderDayFields(start, end, r);
 }
 
 export function openForm(id) {
@@ -446,8 +638,12 @@ export function openForm(id) {
   document.getElementById('f_budget_total').value = r ? (r.budget_total || '') : '';
   document.getElementById('f_budget_daily').value = r ? (r.budget_daily || '') : '';
   document.getElementById('f_dest').value = r ? (r.dest || '') : '';
-  document.getElementById('f_scenic').value = r ? (r.scenic || '') : '';
-  document.getElementById('f_hotel').value = r ? (r.hotel || '') : '';
+  /* 行程按天：无日期时用自由框（镜像文本），有日期时按天生成 N 个框 */
+  const _sf = document.getElementById('f_scenic');
+  const _hf = document.getElementById('f_hotel');
+  if (_sf) _sf.value = r ? (r.scenic || '') : '';
+  if (_hf) _hf.value = r ? (r.hotel || '') : '';
+  renderDayFields(startDate, endDate, r);
   document.getElementById('f_notes').value = r ? (r.notes || '') : '';
 
   /* 花费明细统一由流水派生：编辑态提供「去记流水」直达；新增态提示保存后再记 */
@@ -502,7 +698,7 @@ function fillAiNotes(notes) {
 /* 回填 AI 结果到表单：行程 → 景点路线；注意事项/美食推荐 → 备注 */
 function applyAiResult(res) {
   if (!res) return false;
-  if (res.scenic) document.getElementById('f_scenic').value = res.scenic;
+  if (res.scenic) fillScenicText(res.scenic);
   fillAiNotes(res.notes);
   syncAiChatBtn();
   return !!res.scenic;
@@ -531,7 +727,7 @@ async function aiPlanRoute() {
       days
     });
     if (res && res.scenic) {
-      document.getElementById('f_scenic').value = res.scenic;
+      fillScenicText(res.scenic);
       /* 注意事项 + 美食推荐 → 备注（已有内容时追加，不覆盖用户自己的备注） */
       const filled = fillAiNotes(res.notes);
       /* 回填后表单已有行程内容，立即同步「调整」按钮可见，无需先保存再重开表单 */
@@ -585,8 +781,7 @@ function getAiChatSession(baseScenic) {
 function syncAiChatBtn() {
   const btn = document.getElementById('aiChatBtn');
   if (!btn) return;
-  const scenicEl = document.getElementById('f_scenic');
-  const hasScenic = !!(scenicEl && scenicEl.value.trim());
+  const hasScenic = !!currentScenicText();
   const show = !!(store.user && store.user.ai_enabled) && hasScenic;
   btn.style.display = show ? 'inline-flex' : 'none';
   btn.style.visibility = show ? 'visible' : 'hidden';
@@ -594,7 +789,7 @@ function syncAiChatBtn() {
 
 /* 打开 AI 对话调整面板 */
 function openAiChat() {
-  const scenic = document.getElementById('f_scenic').value.trim();
+  const scenic = currentScenicText();
   if (!scenic) { toast('请先生成或填写行程内容，再进行调整'); return; }
   const dest = document.getElementById('f_dest').value.trim();
   if (!dest) { toast('请先填写主要目的地'); return; }
@@ -666,7 +861,7 @@ async function sendAiChatMessage() {
   const days = parseInt(document.getElementById('f_days').value) || 0;
   /* 当前行程：优先用本会话最近一次 AI 调整结果，否则用会话基准行程 */
   const session = aiChatState.session;
-  const currentScenic = (session && session.lastResult) || document.getElementById('f_scenic').value.trim();
+  const currentScenic = (session && session.lastResult) || currentScenicText();
 
   if (!startDate || !endDate) { toast('请先选择出行起止日期'); return; }
   if (!dest) { toast('请先填写主要目的地'); return; }
@@ -736,7 +931,7 @@ async function sendAiChatMessage() {
 function applyAiChatResult() {
   const session = aiChatState.session;
   if (!session || !session.lastResult) { toast('没有可应用的行程'); return; }
-  document.getElementById('f_scenic').value = session.lastResult;
+  fillScenicText(session.lastResult);
   /* 若本次调整同时更新了注意事项/美食推荐，一并写入备注 */
   const notesFilled = fillAiNotes(session.lastNotes);
   /* 表单内容已成为新的基准行程：同步会话基准，避免下次打开被视为「基准变化」而丢弃历史 */
@@ -768,8 +963,9 @@ async function saveForm() {
     budget_total: parseFloat(document.getElementById('f_budget_total').value) || 0,
     budget_daily: parseFloat(document.getElementById('f_budget_daily').value) || 0,
     dest: document.getElementById('f_dest').value.trim(),
-    scenic: document.getElementById('f_scenic').value,
-    hotel: document.getElementById('f_hotel').value,
+    /* 行程按天：提交 day_plans（服务端据此写 route_days 并回写 scenic/hotel 镜像）。
+     * 字段名不能叫 days —— 那是「天数」(number)，会与本字段互相覆盖。 */
+    day_plans: collectDays(),
     notes: document.getElementById('f_notes').value
   };
   try {
@@ -894,7 +1090,9 @@ function renderOverview(r, body, seedOnly) {
   h += row('年份 / 类型', (r.year || '') + ' · ' + (r.type || ''));
   h += row('出行日期', (r.daterange || '') + (r.days ? '（' + r.days + '天）' : ''));
   h += row('目的地', r.dest || '—');
-  h += row('住宿', r.hotel || '—');
+  h += r.hotel
+    ? '<div class="detail-row"><span class="k">住宿</span></div><div class="pre-wrap">' + esc(r.hotel) + '</div>'
+    : row('住宿', '—');
   h += row('总花费', fmtMoney(t, r.currency) + (per != null ? '（人均 ' + fmtMoney(per, r.currency) + '）' : ''));
   if (r.budget_total > 0) {
     const over = t > r.budget_total;

@@ -52,7 +52,7 @@
 | 同行人管理 | 路线表单 |
 |---|---|
 | ![同行人管理](https://cdn.jsdelivr.net/gh/hanyuestar/travel-expense@main/screenshots/05-travelers.png) | ![路线表单](https://cdn.jsdelivr.net/gh/hanyuestar/travel-expense@main/screenshots/06-route-form.png) |
-| 逗号 / 空格分隔一次加多人；可改名、**「设为我」**标记记账人本人、移除（已被流水引用时二次确认并说明影响）；名单与登记人数不一致时给出提示 | 表单**不再手工填写 9 类花费**，改为「9 类花费由逐笔流水自动汇总（当前 N 笔）」说明 + **「去记流水」**直达；其余字段与旧版一致 |
+| 逗号 / 空格分隔一次加多人；可改名、**「设为我」**标记记账人本人、移除（已被流水引用时二次确认并说明影响）；名单与登记人数不一致时给出提示 | **景点路线 / 住宿按天分框**：填好起止日期后自动按每天生成一个输入框（框头显示「D1 · 10月2日 周五」），长行程不再挤在一个框里；历史单框文本打开时会**自动按天预填**。表单**不再手工填写 9 类花费**，改为「由逐笔流水自动汇总（当前 N 笔）」+ **「去记流水」**直达 |
 
 | AI 规划：行程 / 注意事项 / 美食推荐 一次生成 |
 |---|
@@ -73,6 +73,14 @@
 ---
 
 ## 📌 版本变更记录
+
+### v1.1.3（2026-09-24）
+新增**行程按天编辑**（景点路线 / 住宿），长行程不再挤在一个输入框里（向后兼容旧数据，升级自动迁移）：
+- **按天自动分框**：景点路线与住宿改由**起止日期自动生成 N 个输入框**（框头显示「D1 · 10月2日 周五」），一天一个；日期变化时框随之重建，**已填内容按天保留**。
+- **历史数据自动适配**：旧的单框文本在打开编辑时**自动按天预填** —— 识别 `Day1/Day2…`、`第1天`、`1.`、`9月21日` / `9/21` 等常见写法；识别不出的内容**原样保留、绝不丢失**（未填日期时退回单个自由框）。
+- **存储升级（向后兼容）**：新增按天数据表（一天一行），景点 / 住宿文本改由系统**自动汇总生成**；分享页、AI 规划、CSV 导出、搜索行为保持不变；升级老库时**自动迁移，不改动原有内容**。
+- **AI 规划按天回填**：AI 生成的按天行程会**自动分配进对应的日期框**，替代此前的整段文本。
+- 新增回归脚本 `tests/smoke-days.test.js`（按天读写 / 汇总文本 / 历史兼容 / 跨用户隔离），全量测试 10 个脚本全绿。
 
 ### v1.1.1（2026-09-21）
 新增 **Web 热更新** + **可编辑 AI 提示词** + **AI 请求自动重试**：
@@ -164,7 +172,7 @@ mkdir -p /volume1/docker/travel
 cd /volume1/docker/travel
 curl -O https://raw.githubusercontent.com/hanyuestar/travel-expense/main/docker-compose.yml
 
-# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.1.2）
+# 2. 启动（自动拉取 ghcr.io/hanyuestar/travel-expense:v1.1.3）
 docker compose up -d
 
 # 3. 浏览器打开 http://<你的NAS>:8108 ，管理员 admin / 123456（首登强制改密）
@@ -175,7 +183,7 @@ docker compose up -d
 ```yaml
 services:
   travel-expense:
-    image: ghcr.io/hanyuestar/travel-expense:v1.1.2
+    image: ghcr.io/hanyuestar/travel-expense:v1.1.3
     container_name: travel-expense
     restart: unless-stopped
     ports:
@@ -210,7 +218,7 @@ docker run -d --name travel-expense \
   -p 8108:3000 \
   -v /your/path/data:/data \
   --restart unless-stopped \
-  ghcr.io/hanyuestar/travel-expense:v1.1.2
+  ghcr.io/hanyuestar/travel-expense:v1.1.3
 ```
 
 ### 方式 C：手动运行（无 Docker，需 Node 18+）
@@ -228,8 +236,8 @@ node app.js            # 默认端口 3000；后端自动托管 public/ 前端�
 把网页版打包成手机原生 APP：桌面常驻图标、离线可开 UI、登录后像原生应用一样使用。APP 通过 `fetch` **直连你自托管的服务器**，数据仍全在你自己的服务器上，APP 本身不另存数据。
 
 ### 快速使用（已发布 APK）
-- **下载**：[`app-debug.apk`（v1.1.0）](https://github.com/hanyuestar/travel-expense/releases/download/v1.1.2/app-debug.apk)
-- 备用地址：<https://github.com/hanyuestar/travel-expense/releases/tag/v1.1.2>
+- **下载**：[`app-debug.apk`（v1.1.3）](https://github.com/hanyuestar/travel-expense/releases/download/v1.1.3/app-debug.apk)
+- 备用地址：<https://github.com/hanyuestar/travel-expense/releases/tag/v1.1.3>
 - 手机允许「未知来源」安装后打开即可——**服务器地址已内置，打开即用，无需填写**。
 
 > 该发布包已内置作者服务器地址；若你用自己的服务器，请按下面「自己构建」重新打包。

@@ -87,9 +87,14 @@
           <span style="vertical-align:middle">调整</span>
         </button>
       </label>
+      <div id="dayScenicList" class="day-list" style="display:none"></div>
       <textarea id="f_scenic" placeholder="按天记录：Day1 西宁-祁连…；Day2 张掖…"></textarea>
     </div>
-    <div class="field"><label>住宿位置</label><textarea id="f_hotel" placeholder="如家武林广场店、迪堡酒店…"></textarea></div>
+    <div class="field">
+      <label>住宿位置 <span class="hint">按天填写每天住在哪</span></label>
+      <div id="dayHotelList" class="day-list" style="display:none"></div>
+      <textarea id="f_hotel" placeholder="如家武林广场店、迪堡酒店…"></textarea>
+    </div>
     <div class="field">
       <label>花费明细 <span class="hint">由逐笔流水自动汇总，无需手工填写</span></label>
       <div class="banner" id="expLedgerHint" style="margin:0">

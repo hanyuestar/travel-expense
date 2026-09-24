@@ -136,6 +136,12 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary)
 .field .hint{font-size:11px;color:var(--muted);font-weight:400}
 .exp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(min-width:480px){.exp-grid{grid-template-columns:1fr 1fr 1fr}}
+.day-list{display:flex;flex-direction:column;gap:10px}
+.day-item{border:1px solid var(--line);border-radius:10px;padding:10px 10px 2px;background:#fafdfc}
+.day-item .day-head{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:6px}
+.day-item .day-badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:var(--primary-l);color:var(--primary);font-size:11px}
+.day-item textarea{min-height:52px}
+.day-hint{font-size:12px;color:var(--muted);padding:2px 0 8px}
 .exp-cell{border:1px solid var(--line);border-radius:12px;padding:9px 11px;background:#fafdfc}
 .exp-cell .el{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:5px}
 .exp-cell .el .sw{width:10px;height:10px;border-radius:3px}

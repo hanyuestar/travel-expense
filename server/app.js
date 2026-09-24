@@ -316,7 +316,7 @@ function renderSharePage(r) {
   rows.push(row('年份 / 类型', esc(r.year || '') + (r.type ? ' · ' + esc(r.type) : '')));
   rows.push(row('出行日期', esc(r.daterange || '') + (r.days ? '（' + esc(r.days) + '天）' : '')));
   rows.push(row('目的地', r.dest ? esc(r.dest) : '—'));
-  rows.push(row('住宿', r.hotel ? esc(r.hotel) : '—'));
+  rows.push(row('住宿', r.hotel ? '<span style="white-space:pre-wrap">' + esc(r.hotel) + '</span>' : '—'));
   rows.push(row('总花费', money(t, r.currency)));
   if (dbModule.num(r.budget_total) > 0) {
     const b = dbModule.num(r.budget_total);

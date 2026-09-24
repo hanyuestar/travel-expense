@@ -155,6 +155,26 @@ CREATE TABLE IF NOT EXISTS expense_parts (
   FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE,
   FOREIGN KEY (traveler_id) REFERENCES travelers(id) ON DELETE CASCADE
 );
+
+/* 行程按天（景点路线 / 住宿）——一天一行。
+ * route_days 为该结构的**真源**；routes.scenic / routes.hotel 退化为**物化镜像**，
+ * 仅由 recomputeRouteDays() 回写，使分享页 / AI / 导出 / 搜索无需感知本表。
+ * 历史数据（旧单框文本）由 migrateDaysFromScenic() 原样回填为一条 date='' 的「未分天」记录。 */
+CREATE TABLE IF NOT EXISTS route_days (
+  id TEXT PRIMARY KEY,
+  route_id TEXT NOT NULL,
+  owner_id INTEGER NOT NULL,
+  day_index INTEGER NOT NULL DEFAULT 0,
+  date TEXT DEFAULT '',
+  scenic TEXT DEFAULT '',
+  hotel TEXT DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE,
+  FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_route_days_uniq ON route_days(route_id, day_index);
+CREATE INDEX IF NOT EXISTS idx_route_days_route ON route_days(route_id);
 `;
 
 let db = null;
@@ -189,6 +209,7 @@ function initDb() {
   seedAdmin();
   seedRoutes();
   migrateAggregatesToOpening();
+  migrateDaysFromScenic();
   return db;
 }
 
@@ -314,6 +335,9 @@ function insertRoute(userId, data, isSeed) {
   /* 9 类金额统一由流水派生：把传入的聚合值转成期初流水，再做一次聚合回写。
    * 这样「新建路线 / 导入」携带的 9 类金额不会丢，且后续增删流水能正确增量。 */
   if (createOpeningExpenses(getRouteRow(p.id))) recomputeRouteAgg(p.id);
+  /* 按天行程：优先 day_plans 数组，否则把传入 scenic/hotel 视作「未分天」单条 */
+  const dayPlans = daysFromInput(data);
+  if (dayPlans.length) setRouteDays(p.id, userId, dayPlans);
   return getRoute(p.id);
 }
 
@@ -331,6 +355,11 @@ function updateRoute(id, userId, data) {
   db.prepare(`UPDATE routes SET year=@year, name=@name, daterange=@daterange, type=@type, days=@days, people=@people,
     dest=@dest, scenic=@scenic, hotel=@hotel, start_date=@start_date, end_date=@end_date, currency=@currency, budget_total=@budget_total, budget_daily=@budget_daily, notes=@notes, updated_at=@updated_at
     WHERE id=@id AND owner_id=@owner_id`).run(p);
+  /* 按天行程：day_plans 优先；否则 scenic/hotel 视作未分天单条；都没有则清空
+   * （保持 PUT 整体覆盖语义；镜像 scenic/hotel 由 setRouteDays 统一回写） */
+  const dayPlans = (Array.isArray(data.day_plans) || data.scenic !== undefined || data.hotel !== undefined)
+    ? daysFromInput(data) : [];
+  setRouteDays(id, userId, dayPlans);
   return getRoute(id);
 }
 
@@ -788,6 +817,106 @@ function settle(routeId) {
 
 /* 某路线的流水笔数与结算概览（列表页卡片用，避免逐条查询） */
 
+/* ============================================================================
+   行程按天（景点路线 / 住宿）
+   route_days 为真源；routes.scenic / routes.hotel 为由其派生的物化镜像。
+   ============================================================================ */
+
+/* 由 ISO 日期生成可读标签（如 2026-09-21 → 9月21日）；非法/空返回 '' */
+function dayDateLabel(date) {
+  const m = String(date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  return `${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日`;
+}
+
+function listRouteDays(routeId) {
+  return db.prepare('SELECT day_index, date, scenic, hotel FROM route_days WHERE route_id = ? ORDER BY day_index ASC')
+    .all(routeId)
+    .map(r => ({ date: r.date || '', scenic: r.scenic || '', hotel: r.hotel || '' }));
+}
+
+/* 批量取多条路线的按天数据（列表接口用，避免 N+1） */
+function daysForRoutes(ids) {
+  const out = {};
+  if (!ids || !ids.length) return out;
+  const ph = ids.map(() => '?').join(',');
+  db.prepare(`SELECT route_id, date, scenic, hotel FROM route_days WHERE route_id IN (${ph}) ORDER BY route_id, day_index ASC`)
+    .all(...ids)
+    .forEach(r => { (out[r.route_id] || (out[r.route_id] = [])).push({ date: r.date || '', scenic: r.scenic || '', hotel: r.hotel || '' }); });
+  return out;
+}
+
+/* 由 route_days 生成 scenic / hotel 的物化镜像文本。
+ * 有日期则加「【M月D日】」前缀（便于分享页 / 导出可读）；未分天（date=''）则原样输出，
+ * 因此「历史数据未编辑」时镜像与原文逐字一致。 */
+function recomputeRouteDays(routeId) {
+  const rows = listRouteDays(routeId);
+  const label = (d) => { const l = dayDateLabel(d); return l ? '【' + l + '】' : ''; };
+  const scenic = rows.filter(r => r.scenic.trim()).map(r => label(r.date) + r.scenic).join('\n');
+  const hotel = rows.filter(r => r.hotel.trim()).map(r => label(r.date) + r.hotel).join('\n');
+  db.prepare('UPDATE routes SET scenic = ?, hotel = ?, updated_at = ? WHERE id = ?')
+    .run(scenic, hotel, Date.now(), routeId);
+  return { scenic, hotel };
+}
+
+/* 覆盖式写入某路线的按天数据（days: [{date, scenic, hotel}]），并回写镜像 */
+function setRouteDays(routeId, ownerId, days) {
+  const list = (Array.isArray(days) ? days : []).map((d, i) => ({
+    day_index: i,
+    date: String((d && d.date) || '').trim(),
+    scenic: String((d && d.scenic) || ''),
+    hotel: String((d && d.hotel) || '')
+  }));
+  const now = Date.now();
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM route_days WHERE route_id = ?').run(routeId);
+    const ins = db.prepare(`INSERT INTO route_days
+        (id, route_id, owner_id, day_index, date, scenic, hotel, created_at, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?)`);
+    for (const d of list) ins.run(uid('d'), routeId, ownerId, d.day_index, d.date, d.scenic, d.hotel, now, now);
+    recomputeRouteDays(routeId);
+  });
+  tx();
+  return listRouteDays(routeId);
+}
+
+/* 由入参解析按天数据：优先 day_plans 数组；否则把 scenic / hotel 文本视作「未分天」单条。
+ * 注意：字段名用 day_plans 而非 days —— routes.days 既是表字段也是前端「天数」，
+ * 复用会互相覆盖（曾导致天数被按天数组覆盖的 bug）。 */
+function daysFromInput(data) {
+  if (Array.isArray(data.day_plans)) return data.day_plans;
+  const scenic = String(data.scenic || '');
+  const hotel = String(data.hotel || '');
+  if (scenic || hotel) return [{ date: '', scenic, hotel }];
+  return [];
+}
+
+/* 首次启动回填（幂等）：把已有 scenic / hotel（且尚无按天记录）的路线，
+ * 原样迁移为一条 date='' 的「未分天」记录——不改一个字符，可回滚。
+ * 不在此处解析拆分：历史文本的按天拆分交由前端打开编辑时「尽力预填」，
+ * 保存后才真正结构化（避免自动改写历史内容）。 */
+function migrateDaysFromScenic() {
+  const routes = db.prepare(`SELECT id, owner_id, scenic, hotel FROM routes
+    WHERE (scenic IS NOT NULL AND scenic != '') OR (hotel IS NOT NULL AND hotel != '')`).all();
+  if (!routes.length) return 0;
+  const now = Date.now();
+  const ins = db.prepare(`INSERT INTO route_days
+      (id, route_id, owner_id, day_index, date, scenic, hotel, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?)`);
+  const check = db.prepare('SELECT 1 FROM route_days WHERE route_id = ? LIMIT 1');
+  const tx = db.transaction(() => {
+    let n = 0;
+    for (const r of routes) {
+      if (check.get(r.id)) continue;
+      ins.run(uid('d'), r.id, r.owner_id, 0, '', r.scenic || '', r.hotel || '', now, now);
+      n++;
+    }
+    if (n) console.log(`[db] 已把历史行程迁移为「未分天」记录 ${n} 条（原样保留，编辑时可按天拆分）`);
+    return n;
+  });
+  return tx();
+}
+
 module.exports = {
   initDb, get db() { return db; },
   EXP_KEYS, EXP_COL, num, scryptHash, uid,
@@ -801,5 +930,7 @@ module.exports = {
   listTravelers, findTraveler, addTravelers, updateTraveler, deleteTraveler, travelerUsage,
   insertExpense, updateExpense, deleteExpense, bulkDeleteExpenses, listExpenses, getExpense,
   settle,
+  /* 行程按天（景点路线 / 住宿） */
+  dayDateLabel, listRouteDays, daysForRoutes, setRouteDays, recomputeRouteDays, migrateDaysFromScenic,
   round2
 };

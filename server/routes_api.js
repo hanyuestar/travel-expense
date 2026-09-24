@@ -185,10 +185,12 @@ async function handle(req, res, url, body) {
     const ids = rows.map(r => r.id);
     const counts = expenseCounts(ids);
     const tcounts = travelerCounts(ids);
+    const daysMap = dbModule.daysForRoutes(ids);
     return ok(res, {
       list: rows.map(r => Object.assign(dbModule.routeToJson(r), {
         expense_count: counts[r.id] || 0,
-        traveler_count: tcounts[r.id] || 0
+        traveler_count: tcounts[r.id] || 0,
+        day_plans: daysMap[r.id] || []
       })),
       total, page, pageSize
     });
@@ -262,6 +264,7 @@ async function handle(req, res, url, body) {
         daterange: String(item.daterange || ''), start_date: String(item.start_date || ''), end_date: String(item.end_date || ''),
         days: parseInt(item.days) || 0, people: parseInt(item.people) || 0,
         dest: String(item.dest || ''), scenic: String(item.scenic || ''), hotel: String(item.hotel || ''),
+        day_plans: Array.isArray(item.day_plans) ? item.day_plans : undefined,
         currency: String(item.currency || 'CNY'), budget_total: dbModule.num(item.budget_total), budget_daily: dbModule.num(item.budget_daily),
         exp: (item.exp && typeof item.exp === 'object') ? item.exp : {},
         notes: String(item.notes || '')
@@ -400,7 +403,7 @@ async function handle(req, res, url, body) {
     if (sub) return fail(res, 404, '接口不存在');
 
     if (method === 'GET') {
-      return ok(res, dbModule.routeToJson(row));
+      return ok(res, Object.assign(dbModule.routeToJson(row), { day_plans: dbModule.listRouteDays(id) }));
     }
 
     if (seedReadonly) {
