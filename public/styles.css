@@ -13,9 +13,11 @@ button{font-family:inherit}
 a{color:var(--primary-d);text-decoration:none}
 
 /* ---------- 头部 ---------- */
+/* 页头内边距与主体页面一致（12px），标题/账号与下方内容左右对齐 */
 header{position:sticky;top:0;z-index:30;background:linear-gradient(120deg,var(--primary),#1cc3a3);
-  color:#fff;padding:12px 16px;box-shadow:0 2px 12px rgba(20,90,75,.18)}
-.h-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;max-width:1080px;margin:0 auto}
+  color:#fff;padding:12px;box-shadow:0 2px 12px rgba(20,90,75,.18)}
+/* 页头内容整宽铺开：标题贴左、账号区贴右（此前 max-width:1080px 居中，宽屏两侧留大片空白） */
+.h-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%}
 .h-title{font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px;cursor:pointer}
 .h-title svg{width:22px;height:22px}
 .h-sub{font-size:12px;opacity:.85;margin-top:2px}
@@ -65,6 +67,8 @@ header{position:sticky;top:0;z-index:30;background:linear-gradient(120deg,var(--
 .btn-line{background:#fff;border:1px solid var(--line);color:var(--text)}
 
 /* ---------- 布局 ---------- */
+/* 主体页面统一横向内边距：与页头 12px 对齐（工作台等内容直接渲染进 #view，此前贴边 0px） */
+#view{padding:0 12px}
 .wrap{max-width:1080px;margin:0 auto;padding:8px 14px 28px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
 .flex2{display:grid;grid-template-columns:1fr;gap:16px}
