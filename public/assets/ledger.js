@@ -237,6 +237,25 @@ function caliberNote(sum, cur) {
 }
 
 /* ---------- 记一笔 ---------- */
+
+/* 本地「今天」（YYYY-MM-DD）。不能用 toISOString()——它按 UTC 取日期，
+ * 东八区凌晨 0–8 点会取到「昨天」。 */
+function todayISO() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+/* 记账默认日期：默认「今天」；若今天不在行程区间内（行程未开始 / 已结束），
+ * 取区间内最近的一天。此前默认取「行程第一天」，导致流水大量扎堆在首日。 */
+function defaultSpentOn(route) {
+  const t = todayISO();
+  const s = (route && route.start_date) || '';
+  const e = (route && route.end_date) || '';
+  if (s && t < s) return s;
+  if (e && t > e) return e;
+  return t;
+}
+
 export async function openExpenseSheet(route, expenseId, onChanged) {
   st.route = route;
   st.onChanged = onChanged || null;
@@ -261,7 +280,7 @@ export async function openExpenseSheet(route, expenseId, onChanged) {
       }
     : {
         amount: '', category: '餐饮',
-        spent_on: route.start_date || new Date().toISOString().slice(0, 10),
+        spent_on: defaultSpentOn(route),
         title: '', note: '',
         payer_id: self ? self.id : null,
         parts: ts.map(t => t.id)

@@ -72,7 +72,9 @@ function applyCors(req, res) {
   if (!allowAll && !config.ALLOWED_ORIGINS.includes(origin)) return false;
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  /* 必须覆盖前端实际用到的全部写方法：修改流水 / 同行人走 PATCH，
+   * 缺 PATCH 会导致 APP（跨域）预检失败、fetch 抛 TypeError（浏览器同源无预检故不受影响）。 */
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') {
     res.writeHead(204);

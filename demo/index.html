@@ -997,6 +997,8 @@ function detailExp(c,v,t){const pct=t>0?Math.round(v/t*100):0;
 const TVC=["#60a5fa","#3b82f6","#06b6d4","#f59e0b","#ef6b5e","#a78bfa","#ec4899","#fb923c","#94a3b8"];
 const QUICK=[50,100,200,500,1000];
 let D={routeId:null,editing:null,draft:null};
+/* 本地「今天」（YYYY-MM-DD）；不能用 toISOString()（UTC），东八区凌晨会取到昨天 */
+function todayISO(){const d=new Date();const p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());}
 function openExpenseSheet(routeId,expId){
   const r=routes.find(x=>x.id===routeId);if(!r)return;
   if(!(r.travelers||[]).length&&!(parseFloat(r.people)>0)){toast("请先添加同行人");return openTravelersSheet(routeId);}
@@ -1006,7 +1008,7 @@ function openExpenseSheet(routeId,expId){
   const ts=r.travelers||[];const self=ts.find(t=>t.is_self)||ts[0];
   D.draft=e?{amount:e.amount,category:e.category,date:e.spent_on||"",title:e.title||"",note:e.note||"",
       payer:e.payer_id||(self?self.id:null),parts:(e.parts||[]).slice()}
-    :{amount:"",category:"餐饮",date:"",title:"",note:"",payer:self?self.id:null,parts:ts.map(t=>t.id)};
+    :{amount:"",category:"餐饮",date:todayISO(),title:"",note:"",payer:self?self.id:null,parts:ts.map(t=>t.id)};
   document.getElementById("e_title").textContent=e?"编辑流水":"记一笔";
   document.getElementById("e_del").style.display=e?"":"none";
   document.getElementById("e_quick").innerHTML=QUICK.map(q=>'<div class="chip" data-q="'+q+'">¥'+fmt(q)+'</div>').join("");
